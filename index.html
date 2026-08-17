@@ -289,6 +289,8 @@
     @media(pointer:coarse){.gantt-scroll{cursor:auto}.gantt-bar,.project-list-card{cursor:pointer}.resize-handle{display:none}}
 
     .btn.synced{background:var(--success);border-color:var(--success);color:#fff}
+    .sync-time{font-size:12px;color:var(--muted);align-self:center;white-space:nowrap;margin-left:-4px}
+    .sync-time.active{color:var(--success)}
     .sync-body{padding:18px}
     .sync-tip{font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px}
     .sync-steps{margin:0 0 14px;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.7}
@@ -317,6 +319,7 @@
   <button class="btn" id="exportBtn" type="button">导出备份</button>
   <button class="btn" id="importBtn" type="button">导入恢复</button>
   <button class="btn" id="syncBtn" type="button">云端</button>
+  <span class="sync-time" id="syncTime"></span>
   <input type="file" id="importFile" accept=".json" hidden>
 </nav></div></header>
 
@@ -416,6 +419,7 @@
   let lastSavedAt = 0;
   let syncTimer = null;
   let syncLog = { lastPush:'', lastPull:'', lastError:'', gistId:'' };
+  let lastSyncTs = 0;   // 最近一次成功拉取云端的时间戳，用于顶栏显示
   let pagesCfg = { repo:'', login:'', url:'', publishedAt:'' };
   let currentScale = 'week', zoomValue = 74;
   let viewStarts = {};
@@ -470,15 +474,14 @@
     if(!data || !Array.isArray(data.projects)){ data = data||{}; data.projects=[]; }
     normalizeTypes(data.projects, true);
     lastSavedAt = data._savedAt || 0;
-    if(syncCfg.enabled && syncCfg.token){ await pullRemote(true); } // 启动以云端为准，等待拉取完成
+    if(syncCfg.enabled && syncCfg.token){ await pullRemote(true); } // 启动拉取云端（最后写入胜出：云端比本地新才覆盖）
     saveData(true); // 启动时只写本地，避免覆盖刚拉取的云端数据
   }
   function saveData(skipRemote=false){
-    const previousSavedAt = lastSavedAt; // 本次保存前本地的时间戳，用于冲突检测
     data._savedAt = Date.now();
     lastSavedAt = data._savedAt;
     try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){ showToast('本地存储失败'); }
-    if(!skipRemote && syncCfg.enabled && syncCfg.token) pushRemote(previousSavedAt);
+    if(!skipRemote && syncCfg.enabled && syncCfg.token) pushRemote();
   }
   /* ---------- 云端同步（GitHub 私有 Gist） ---------- */
   const GH_API = 'https://api.github.com/gists';
@@ -498,7 +501,7 @@
   }
   async function gistRead(){ const r = await ghFetch(GH_API+'/'+syncCfg.gistId, 'GET'); const f=r.files&&r.files['ppm.json']; return f?JSON.parse(f.content):null; }
   async function gistUpdate(content){ await ghFetch(GH_API+'/'+syncCfg.gistId, 'PATCH', { files:{ 'ppm.json':{ content: JSON.stringify(content) } } }); }
-  async function pushRemote(previousSavedAt = 0){
+  async function pushRemote(){
     if(!syncCfg.token) return;
     if(pushRemote.running) return; // 防止连续保存/轮询导致并发竞态
     pushRemote.running = true;
@@ -506,25 +509,9 @@
       if(!syncCfg.gistId){
         try{ await gistCreate(data); syncLog.gistId = syncCfg.gistId; }catch(e){ syncLog.lastError='创建 Gist 失败: '+(e.message||e); renderSyncInfo(); console.warn('创建 Gist 失败', e); return; }
       }
-
-      // 推送前先读取云端，若云端在本次保存前已被其他设备更新，则以云端为准，避免覆盖
-      let remote = null;
-      try{ remote = await gistRead(); }catch(e){ /* 读取失败继续尝试推送 */ }
-
-      if(remote && remote._savedAt && remote._savedAt > previousSavedAt){
-        data = remote;
-        normalizeTypes(data.projects, true);
-        lastSavedAt = data._savedAt || Date.now();
-        try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){}
-        render();
-        updateSyncBtn();
-        syncLog.lastPull = new Date().toLocaleString('zh-CN',{hour12:false}) + (syncCfg.gistId?' · '+syncCfg.gistId.slice(0,8):'') + '（已同步其他设备更新）';
-        syncLog.lastError = '检测到其他设备已更新，已同步为最新数据';
-        renderSyncInfo();
-        showToast('检测到其他设备已更新，已同步');
-        return;
-      }
-
+      // 本地本次修改已写入 data._savedAt=Date.now()，即当前最新时间戳；
+      // 直接以本地为准推送到云端（last-write-wins），不再因云端时间戳较新而放弃，
+      // 否则删除/修改会被其他设备更早的旧内容覆盖而“回弹”。
       try{
         await gistUpdate(data);
         syncLog.lastPush = new Date().toLocaleString('zh-CN',{hour12:false});
@@ -538,23 +525,35 @@
   }
   async function pullRemote(silent, force){
     if(!syncCfg.token) return;
+    if(pullRemote.running) return;   // 防止轮询/事件并发拉取叠加
+    pullRemote.running = true;
     try{
       // 每次都先找到最新的那份 Gist，自动修复多 Gist 分裂问题
       const ours = await gistFindOurs();
       if(ours && ours.id !== syncCfg.gistId){ syncCfg.gistId = ours.id; saveSyncCfg(); }
       const remote = await gistRead();
-      if(remote && (force || (remote._savedAt && remote._savedAt > (lastSavedAt||0)))){
+      // 覆盖判定：force / 云端时间戳更新 / 内容不同（后者消除两端设备时钟不一致导致的漏更）
+      const timeNewer = !!(remote && remote._savedAt && remote._savedAt > (lastSavedAt||0));
+      const contentDiff = !!remote && JSON.stringify(remote.projects) !== JSON.stringify(data.projects);
+      // 保护：本地正在推送且云端不更新时暂不覆盖，避免清掉正在上传的本地修改
+      const skipByLocalPush = pushRemote.running && !timeNewer;
+      if(remote && (force || timeNewer || contentDiff) && !skipByLocalPush){
         data = remote; normalizeTypes(data.projects, true); lastSavedAt = data._savedAt || Date.now();
         try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){}
         render(); updateSyncBtn();
-        syncLog.lastPull = new Date().toLocaleString('zh-CN',{hour12:false}) + (syncCfg.gistId?' · '+syncCfg.gistId.slice(0,8):'');
+        const tag = (contentDiff && !timeNewer) ? '（按内容差异同步）' : '';
+        syncLog.lastPull = new Date().toLocaleString('zh-CN',{hour12:false}) + (syncCfg.gistId?' · '+syncCfg.gistId.slice(0,8):'') + tag;
         syncLog.lastError = '';
       } else {
         syncLog.lastPull = new Date().toLocaleString('zh-CN',{hour12:false}) + (syncCfg.gistId?' · '+syncCfg.gistId.slice(0,8):'') + '（已是最新）';
       }
       syncLog.gistId = syncCfg.gistId;
+      syncLog.remoteSavedAt = remote ? (remote._savedAt||0) : 0;  // 用于诊断：对比本地/云端保存时间
+      lastSyncTs = Date.now();
+      updateSyncTime();
       renderSyncInfo();
     }catch(e){ syncLog.lastError='拉取云端失败: '+(e.message||e); renderSyncInfo(); if(!silent) showToast('拉取云端失败'); }
+    finally{ pullRemote.running = false; }
   }
   function parseNextLink(link){
     const m = link && link.match(/<([^>]+)>;\s*rel="next"/);
@@ -1157,10 +1156,20 @@
 
   /* ---------- 事件绑定 ---------- */
   /* ---------- 云端同步 UI ---------- */
+  function updateSyncTime(){
+    const el = $('syncTime'); if(!el) return;
+    if(!syncCfg.enabled || !lastSyncTs){ el.classList.remove('active'); el.textContent=''; return; }
+    const t = new Date(lastSyncTs);
+    const hh = String(t.getHours()).padStart(2,'0');
+    const mm = String(t.getMinutes()).padStart(2,'0');
+    el.textContent = '同步 '+hh+':'+mm;
+    el.classList.add('active');
+  }
   function updateSyncBtn(){
     const b = $('syncBtn'); if(!b) return;
     if(syncCfg.enabled){ b.textContent='已同步'; b.classList.add('synced'); }
     else { b.textContent='云端'; b.classList.remove('synced'); }
+    updateSyncTime();
   }
   function setSyncStatus(msg, type){ const el=$('syncStatus'); el.textContent=msg||''; el.className='sync-status'+(type?(' '+type):''); }
   function renderSyncInfo(){
@@ -1171,8 +1180,16 @@
     rows.push('<div><b>当前 Gist</b><code>'+(id?id.slice(0,12)+'…':'未连接')+'</code></div>');
     if(syncLog.lastPush) rows.push('<div><b>最后推送</b><span>'+syncLog.lastPush+'</span></div>');
     if(syncLog.lastPull) rows.push('<div><b>最后拉取</b><span>'+syncLog.lastPull+'</span></div>');
+    if(syncLog.remoteSavedAt) rows.push('<div><b>云端保存</b><span>'+new Date(syncLog.remoteSavedAt).toLocaleString('zh-CN',{hour12:false})+'</span></div>');
+    if(lastSavedAt) rows.push('<div><b>本地保存</b><span>'+new Date(lastSavedAt).toLocaleString('zh-CN',{hour12:false})+'</span></div>');
     if(syncLog.lastError) rows.push('<div><b>最近错误</b><span style="color:var(--danger)">'+escapeHTML(syncLog.lastError)+'</span></div>');
-    el.innerHTML = rows.join('');
+    let hint='';
+    if(syncLog.remoteSavedAt && lastSavedAt){
+      const d = syncLog.remoteSavedAt - lastSavedAt;
+      if(d > 2000) hint='云端保存比本地新，正在等待拉取同步到本设备';
+      else if(d < -2000) hint='本地保存比云端新较多：可能电脑端未推送成功，或两端设备时钟不一致';
+    }
+    el.innerHTML = rows.join('') + (hint?'<div style="font-size:12px;color:var(--text-secondary);margin-top:6px">提示：'+escapeHTML(hint)+'</div>':'');
     el.classList.toggle('active', syncCfg.enabled || syncLog.lastError);
   }
   function openSyncModal(){ $('syncToken').value = syncCfg.token; setSyncStatus(''); renderSyncInfo(); renderPagesInfo(); openModal($('syncModal')); }
@@ -1232,11 +1249,14 @@
   async function publishToGitHubPages(){
     const token = ($('syncToken').value || syncCfg.token || '').trim();
     if(!token){ setPagesStatus('请先在上方填写 GitHub 令牌（需 gist+repo 权限）', 'err'); return; }
+    if(!syncCfg.gistId){ setPagesStatus('请先完成上方「测试并保存」同步配置，再发布', 'err'); return; }
     const repo = ($('pagesRepo').value || 'progress-workbench').trim().replace(/[^A-Za-z0-9._-]/g,'-').replace(/^-+|-+$/g,'') || 'progress-workbench';
     setPagesStatus('正在验证令牌…'); $('pagesPublishBtn').disabled = true;
     try{
-      const me = await ghApi('/user', 'GET', null, token);
-      const login = me.login;
+      // 通过已能正常访问的 Gist 详情获取用户名，绕过 /user 端点的 CORS 拦截
+      const gistDetail = await ghFetch(GH_API + '/' + syncCfg.gistId, 'GET');
+      const login = gistDetail && gistDetail.owner && gistDetail.owner.login;
+      if(!login) throw new Error('无法从 Gist 信息获取用户名');
       setPagesStatus('准备仓库 '+login+'/'+repo+' …');
       let repoData;
       try{ repoData = await ghApi('/repos/'+login+'/'+repo, 'GET', null, token); }
@@ -1258,7 +1278,12 @@
       info.innerHTML = '固定地址：<div class="pages-url"><a href="'+url+'" target="_blank" rel="noopener">'+url+'</a></div>仓库：'+login+'/'+repo+'<br>以后更新网站只需再次点击「发布到 GitHub Pages」，地址不变。';
       showToast('已发布到 GitHub Pages');
     }catch(e){
-      setPagesStatus('发布失败：'+(e.message||e)+'（令牌需同时有 gist 和 repo 权限）', 'err');
+      const msg = String(e.message||e);
+      let hint = '（令牌需同时有 gist 和 repo 权限）';
+      if(/Load failed|NetworkError|Failed to fetch|Network|CORS|cross-origin/i.test(msg)){
+        hint = '，判断为浏览器拦截了跨域请求。请尝试：①换 Chrome/Edge 浏览器打开本页再点发布；②Safari 关闭「设置→Safari→高级→阻止跨站跟踪」后重试；③仍不行可手动上传 index.html 到 GitHub 仓库更新。';
+      }
+      setPagesStatus('发布失败：'+msg+hint, 'err');
     }finally{ $('pagesPublishBtn').disabled = false; }
   }
   function renderPagesInfo(){
@@ -1272,8 +1297,19 @@
   function startSyncPolling(){
     if(syncTimer){ clearInterval(syncTimer); syncTimer=null; }
     if(!syncCfg.enabled) return;
-    syncTimer = setInterval(()=>{ if(document.visibilityState==='visible') pullRemote(true); }, 5000);
-    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && syncCfg.enabled) pullRemote(true); });
+    // 前台 3 秒、后台 15 秒拉取；靠每 1 秒的节拍判断切档，省电又尽量跟随
+    let lastFast=0, lastSlow=0;
+    syncTimer = setInterval(()=>{
+      const now=Date.now();
+      if(document.visibilityState==='visible'){ if(now-lastFast>=3000){ lastFast=now; pullRemote(true); } }
+      else { if(now-lastSlow>=15000){ lastSlow=now; pullRemote(true); } }
+    }, 1000);
+    // 聚焦 / 页面恢复显示 / 重新联网 时立即同步，避免错过变更
+    const immediate = ()=>{ if(syncCfg.enabled && document.visibilityState!=='hidden') pullRemote(true); };
+    window.addEventListener('focus', immediate);
+    window.addEventListener('pageshow', immediate);
+    window.addEventListener('online', immediate);
+    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') immediate(); });
   }
 
   function bindEvents(){
