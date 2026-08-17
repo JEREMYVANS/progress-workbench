@@ -1282,6 +1282,8 @@
       let hint = '（令牌需同时有 gist 和 repo 权限）';
       if(/Load failed|NetworkError|Failed to fetch|Network|CORS|cross-origin/i.test(msg)){
         hint = '，判断为浏览器拦截了跨域请求。请尝试：①换 Chrome/Edge 浏览器打开本页再点发布；②Safari 关闭「设置→Safari→高级→阻止跨站跟踪」后重试；③仍不行可手动上传 index.html 到 GitHub 仓库更新。';
+      } else if(/current plan does not support GitHub Pages|GitHub Pages/i.test(msg)){
+        hint = '。原因：GitHub 对当前仓库/账号的 Pages 套餐有限制。解决办法：①打开 https://github.com/JEREMYVANS/progress-workbench/settings → Danger Zone → 将仓库改为 Public，GitHub Pages 即可免费使用；②或改用 Vercel/Netlify/Cloudflare Pages 托管。';
       }
       setPagesStatus('发布失败：'+msg+hint, 'err');
     }finally{ $('pagesPublishBtn').disabled = false; }
