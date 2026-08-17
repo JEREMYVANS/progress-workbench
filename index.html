@@ -153,9 +153,10 @@
     .task-text .task-meta u{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px;text-decoration-color:var(--olive);font-weight:600;color:var(--text)}
     .task-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:max-content;padding-top:22px}
     .task-deadline{display:flex;align-items:center;justify-content:flex-end;color:var(--muted);font-size:11px;font-weight:600;white-space:nowrap;min-width:max-content}
-    .task-filter{display:flex;align-items:center;gap:8px;padding:10px 16px 2px}
+    .task-filter{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;padding:10px 16px 2px;overflow-x:auto}
     .task-filter .filter-label{color:var(--muted);font-size:11.5px;font-weight:780;white-space:nowrap}
-    .task-filter-select{height:32px;min-width:120px;padding:0 28px 0 11px;border:1px solid var(--line);border-radius:999px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23526173' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 11px center;color:var(--text);font-size:12px;font-weight:760;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none}
+    .task-filter .filter-label.prio{margin-left:8px}
+    .task-filter-select{height:32px;min-width:100px;padding:0 28px 0 11px;border:1px solid var(--line);border-radius:999px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23526173' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 11px center;color:var(--text);font-size:12px;font-weight:760;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;flex:0 0 auto}
     .task-filter-select:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
 
     .modal-overlay{position:fixed;inset:0;z-index:130;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.38);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
@@ -410,9 +411,9 @@
   const weekNames = ['周日','周一','周二','周三','周四','周五','周六'];
   const PRIORITY_WEIGHT = { 'P0':0, 'P1':1, 'P2':2 };
   const PROJECT_TYPES = ['项目','定制单'];
-  const TASK_TYPES = ['PDM','设计','测试','装机','杂事'];
+  const TASK_TYPES = ['PDM','设计','测试','装机','杂事','手册'];
   const PROJECT_TYPE_COLOR = { '项目':'var(--olive)', '定制单':'#7c3aed' };
-  const TASK_TYPE_COLOR = { 'PDM':'#0891b2', '设计':'var(--blue)', '测试':'#d97706', '装机':'#16a34a', '杂事':'#64748b' };
+  const TASK_TYPE_COLOR = { 'PDM':'#0891b2', '设计':'var(--blue)', '测试':'#d97706', '装机':'#16a34a', '杂事':'#64748b', '手册':'#9333ea' };
 
   let data = { projects: [] };
   let syncCfg = { enabled:false, token:'', gistId:'' };
@@ -429,6 +430,8 @@
   let activeDrag = null, dragRaf = 0, lastPointerX = 0, lastPointerY = 0, touchBarTap = null;
   let archiveExpanded = true;
   let todayTaskFilter = new Set(TASK_TYPES);
+  const PRIORITY_LIST = ['P0','P1','P2'];
+  let todayPriorityFilter = new Set(PRIORITY_LIST);
 
   const els = {
     monitor:$('monitor'), timeline:$('timeline'), rows:$('projectRows'), ganttScroll:$('ganttScroll'),
@@ -801,6 +804,7 @@
     data.projects.forEach(p=>{
       getAllDeep(p.tasks).forEach(t=>{
         if(!todayTaskFilter.has(t.type||'设计')) return;
+        if(!todayPriorityFilter.has(t.priority||'P1')) return;
         // 只显示最下层叶子子任务：没有子任务或子任务为空
         if(t.tasks && t.tasks.length) return;
         const end=parseISO(t.end), start=parseISO(t.start), now=todayDate;
@@ -845,20 +849,34 @@
   function renderDate(){ $('weekday').textContent=`今天 · ${weekNames[todayDate.getDay()]}`; $('todayText').textContent=`${todayDate.getMonth()+1}月${todayDate.getDate()}日`; }
   function renderScaleTabs(){ document.querySelectorAll('#scaleTabs [data-scale]').forEach(b=>{ const a=b.dataset.scale===currentScale; b.classList.toggle('active',a); b.setAttribute('aria-selected',String(a)); }); }
   function renderTaskFilter(){
-    const all = TASK_TYPES.every(t=>todayTaskFilter.has(t));
-    let html = `<span class="filter-label">类型</span><select class="task-filter-select" id="taskFilterSelect" aria-label="筛选子任务类型">`;
-    html += `<option value="" ${all?'selected':''}>全部类型</option>`;
-    html += TASK_TYPES.map(t=>`<option value="${t}" ${!all && todayTaskFilter.has(t)?'selected':''}>${t}</option>`).join('');
+    const allTypes = TASK_TYPES.every(t=>todayTaskFilter.has(t));
+    const allPrios = PRIORITY_LIST.every(p=>todayPriorityFilter.has(p));
+    let html = '';
+    html += `<span class="filter-label">类型</span><select class="task-filter-select" id="taskFilterSelect" aria-label="筛选子任务类型">`;
+    html += `<option value="" ${allTypes?'selected':''}>全部类型</option>`;
+    html += TASK_TYPES.map(t=>`<option value="${t}" ${!allTypes && todayTaskFilter.has(t)?'selected':''}>${t}</option>`).join('');
+    html += `</select>`;
+    html += `<span class="filter-label prio">优先级</span><select class="task-filter-select" id="priorityFilterSelect" aria-label="筛选优先级">`;
+    html += `<option value="" ${allPrios?'selected':''}>全部优先级</option>`;
+    html += PRIORITY_LIST.map(p=>`<option value="${p}" ${!allPrios && todayPriorityFilter.has(p)?'selected':''}>${p} ${priorityText(p)}</option>`).join('');
     html += `</select>`;
     const box=$('taskFilter'); if(!box) return; box.innerHTML = html;
   }
   function bindTaskFilter(){
     const box=$('taskFilter'); if(!box) return;
     box.addEventListener('change', e=>{
-      const select=e.target.closest('#taskFilterSelect'); if(!select) return;
-      const val = select.value;
-      if(val===''){ TASK_TYPES.forEach(t=>todayTaskFilter.add(t)); }
-      else { todayTaskFilter = new Set([val]); }
+      const typeSelect=e.target.closest('#taskFilterSelect');
+      const prioSelect=e.target.closest('#priorityFilterSelect');
+      if(typeSelect){
+        const val = typeSelect.value;
+        if(val===''){ TASK_TYPES.forEach(t=>todayTaskFilter.add(t)); }
+        else { todayTaskFilter = new Set([val]); }
+      }
+      if(prioSelect){
+        const val = prioSelect.value;
+        if(val===''){ PRIORITY_LIST.forEach(p=>todayPriorityFilter.add(p)); }
+        else { todayPriorityFilter = new Set([val]); }
+      }
       renderTaskFilter(); renderTasks();
     });
   }
