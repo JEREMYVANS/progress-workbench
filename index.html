@@ -535,15 +535,14 @@ create policy "ppm own row" on ppm_workbench
     normalizeTypes(data.projects, true);
     lastSavedAt = data._savedAt || 0;
     if(syncCfg.enabled){ loadSbAuth(); if(sbAuthed()) await pullRemote(true); } // 启动拉取云端（含登录凭据自动续期）
-    saveData(true); // 启动时只写本地，避免覆盖刚拉取的云端数据
+    saveData(true, true); // 启动时只写本地且不刷新时间戳，避免"未修改的启动"显得比云端新
     loadingData = false;
   }
   // 设备标识：每台设备/每个浏览器入口生成一次，用于多端同步诊断
   const deviceId = (()=>{ try{ let d=localStorage.getItem(LS_KEY+'_dev'); if(!d){ d='dev-'+uid(); localStorage.setItem(LS_KEY+'_dev', d); } return d; }catch(e){ return 'dev-local'; } })();
-  function saveData(skipRemote=false){
+  function saveData(skipRemote=false, keepStamp=false){
     if(!loadingData) delete data._demo; // 真正的用户保存才视为真实数据，清除示例标记以允许同步上传
-    data._savedAt = Date.now();
-    lastSavedAt = data._savedAt;
+    if(!keepStamp){ data._savedAt = Date.now(); lastSavedAt = data._savedAt; } // keepStamp：启动/对齐时不刷新，保持真实最后修改时间
     try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){ showToast('本地存储失败'); }
     if(!skipRemote && sbAuthed()) pushRemote();
   }
@@ -635,6 +634,14 @@ create policy "ppm own row" on ppm_workbench
             await pullRemote(true, true);
             return;
           }
+        }
+        // 保护三：云端保存时间比本地明显更新（5 秒容差）—— 本地是旧缓存（如新设备登录前遗留），
+        // 不允许旧数据覆盖云端新数据；改为对齐云端。确要以本机为准请用「数据急救 · 重置云端为本机数据」。
+        if(!bypassGuards && remoteReal && remote._savedAt && (data._savedAt||0) && remote._savedAt > (data._savedAt||0) + 5000){
+          syncLog.lastError = '已阻止推送：云端保存时间（'+new Date(remote._savedAt).toLocaleString('zh-CN',{hour12:false})+'）比本地更新，本地疑似旧数据，已自动对齐云端。如确要用本机数据覆盖云端，请用「数据急救 · 重置云端为本机数据」。';
+          renderSyncInfo();
+          await pullRemote(true, true);
+          return;
         }
         // 正常推送：先把云端当前内容收进历史快照（自动保留最近 10 份，随时可回滚），再写入新数据
         const hist = [];
@@ -1363,7 +1370,13 @@ create policy "ppm own row" on ppm_workbench
       await sbSignInAct(email, password);
       syncCfg.enabled = true; saveSyncCfg();
       renderSyncInfo();
-      await pushRemote(); saveData();               // 把本设备数据写入云端账号（其余设备轮询自动对齐）
+      // 登录后云端优先：先拉取云端最新（本地被覆盖前自动备份 _bak）；
+      // 只有云端为空（新账号首次启用）且本地有真实数据时才把本机数据上传
+      await pullRemote(true, true);
+      if(syncLog.remoteProjects === 0 && data.projects.length && !data._demo){
+        await pushRemote();
+      }
+      saveData(true, true);
       updateSyncBtn(); startSyncPolling();
       const cd = $('sbConfigDetails'); if(cd) cd.open = false;   // 登录成功后自动收起配置区
       showToast(mode==='signup' ? '注册成功，云端同步已开启' : '登录成功，云端同步已开启');
