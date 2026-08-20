@@ -386,7 +386,7 @@
     font-style: normal;
     font-weight: 100 900;
     font-display: swap;
-    src: url("safari-web-extension://6B249C30-B15D-40A4-91D4-624540591BC7/fonts/InterVariable.woff2") format("woff2");
+    src: url("safari-web-extension://B55019AC-0D7E-48B8-BDDB-54D7092D484C/fonts/InterVariable.woff2") format("woff2");
   }
   #cubox-react-root {
     z-index: 999999999999999999999;
@@ -398,7 +398,7 @@
   <button class="btn" id="exportBtn" type="button">导出备份</button>
   <button class="btn" id="importBtn" type="button">导入恢复</button>
   <button class="btn synced" id="syncBtn" type="button">已同步</button>
-  <span class="sync-time active" id="syncTime">同步 00:04</span>
+  <span class="sync-time active" id="syncTime">同步 00:15</span>
   <input type="file" id="importFile" accept=".json" hidden="">
 </nav></div></header>
 
@@ -463,7 +463,7 @@
   <div class="modal-head"><h3 id="syncTitle">云端同步</h3><button class="close" type="button" data-close="syncModal" aria-label="关闭">×</button></div>
   <div class="sync-body">
     <div class="sync-status" id="syncStatus"></div>
-    <div class="sync-info active" id="syncInfo"><div><b>连接状态</b><span>已登录</span></div><div><b>同步账号</b><code>13686102692@163.com</code></div><div><b>云端项目</b><span>8 个</span></div><div><b>本地项目</b><span>8 个</span></div><div><b>云端快照</b><span>10 份可恢复</span></div><div><b>本设备</b><code>dev-msyq3fto</code></div><div><b>最后拉取</b><span>2026/8/21 00:04:10（已是最新）</span></div><div><b>云端保存</b><span>2026/8/20 23:25:57</span></div><div><b>本地保存</b><span>2026/8/20 23:25:57</span></div></div>
+    <div class="sync-info active" id="syncInfo"><div><b>连接状态</b><span>已登录</span></div><div><b>同步账号</b><code>13686102692@163.com</code></div><div><b>云端项目</b><span>8 个</span></div><div><b>本地项目</b><span>8 个</span></div><div><b>云端快照</b><span>10 份可恢复</span></div><div><b>本设备</b><code>dev-msyq3fto</code></div><div><b>最后拉取</b><span>2026/8/21 00:15:00（已是最新）</span></div><div><b>云端保存</b><span>2026/8/20 23:25:57</span></div><div><b>本地保存</b><span>2026/8/20 23:25:57</span></div></div>
     <div class="modal-actions"><div class="actions">
       <button class="btn" type="button" id="syncDisconnectBtn">登出</button>
       <button class="btn primary" type="button" id="syncNowBtn">立即同步</button>
@@ -1656,14 +1656,21 @@ create policy "ppm own row" on ppm_workbench
     clone.querySelectorAll('.modal-overlay.active').forEach(el => el.classList.remove('active'));
     // 2) 清除敏感输入框的值，避免把 Token/密码等带进公开仓库
     clone.querySelectorAll('#pagesToken, #sbKey, #sbPassword').forEach(el => { if(el) el.value = ''; });
-    // 3) 移除脚本，避免后续正则误伤脚本文本
+    // 3) 发布时重置视图状态为默认甘特图，避免发布瞬间用户停在「今日/日历」视图，导致 GitHub Pages 默认显示错误视图
+    const mg = clone.querySelector('#mainGrid'); if(mg) mg.dataset.view = 'gantt';
+    const ws = clone.querySelector('#workspace'); if(ws){ ws.removeAttribute('hidden'); ws.hidden = false; }
+    const tb = clone.querySelector('#todayBoard'); if(tb){ tb.setAttribute('hidden',''); tb.hidden = true; }
+    const cc = clone.querySelector('#completedCalendar'); if(cc){ cc.setAttribute('hidden',''); cc.hidden = true; }
+    clone.querySelectorAll('.nav-btn.primary').forEach(btn => btn.classList.remove('primary'));
+    const ganttBtn = clone.querySelector('[data-view-key="gantt"].nav-btn'); if(ganttBtn) ganttBtn.classList.add('primary');
+    // 4) 移除脚本，避免后续正则误伤脚本文本
     const scriptEl = clone.querySelector('script');
     if(scriptEl) scriptEl.remove();
     let html = clone.outerHTML;
-    // 4) 字符串级别兜底清理 CloudStudio 预览器注入的运行时残留
+    // 5) 字符串级别兜底清理 CloudStudio 预览器注入的运行时残留
     html = html.replace(/\s*<div id="cubox-react-root"[^>]*>[\s\S]*?<\/div>/g, ''); // 去除注入的空根节点
     html = html.replace(/(<html[^>]*?)\sstyle="[^"]*"/i, '$1'); // 去除 <html> 上注入的内联样式（--units/--unit 等）
-    // 5) 重新注入干净脚本副本（优先用加载时捕获的原文；currentScript 不可用时退回读取当前脚本元素文本——浏览器不会修改内联脚本文本）
+    // 6) 重新注入干净脚本副本（优先用加载时捕获的原文；currentScript 不可用时退回读取当前脚本元素文本——浏览器不会修改内联脚本文本）
     const liveScript = document.querySelector('script');
     const cleanScript = APP_SOURCE_SCRIPT || (liveScript ? liveScript.textContent : '');
     // 注意：闭合标签必须用 <\/script>（反斜杠转义），否则 HTML 解析器会在字符串字面量处提前结束脚本
