@@ -1012,7 +1012,7 @@ create policy "ppm own row" on ppm_workbench
     const iso = n => toISO(addDays(t, n));
     const mkT = (name, prio, s, e, type='设计', kids=[]) => ({ id:uid(), name, priority:prio, start:s, end:e, type:type, completed:false, expanded:true, tasks:kids });
     data.projects = [
-      { id:uid(), name:'商业综合体结构设计', color:COLORS[0], priority:'P0', type:'项目', start:iso(-10), end:iso(20), completed:false, expanded:true, tasks:[
+      { id:uid(), name:'项目 A', color:COLORS[0], priority:'P0', type:'项目', start:iso(-10), end:iso(20), completed:false, expanded:true, tasks:[
         mkT('方案设计','P1',iso(-10),iso(-2)),
         mkT('结构计算书','P0',iso(-5),iso(12),'设计',[
           mkT('荷载统计','P1',iso(-5),iso(-1),'PDM'),
@@ -1021,12 +1021,12 @@ create policy "ppm own row" on ppm_workbench
         ]),
         mkT('施工图绘制','P1',iso(8),iso(20),'设计')
       ]},
-      { id:uid(), name:'厂房加固改造', color:COLORS[1], priority:'P1', type:'项目', start:iso(-15), end:iso(10), completed:false, expanded:true, tasks:[
+      { id:uid(), name:'项目 B', color:COLORS[1], priority:'P1', type:'项目', start:iso(-15), end:iso(10), completed:false, expanded:true, tasks:[
         mkT('现场检测','P1',iso(-15),iso(-8),'测试'),
         mkT('加固方案','P0',iso(-7),iso(-1),'设计'),
         mkT('节点详图','P1',iso(0),iso(10),'设计')
       ]},
-      { id:uid(), name:'某设备定制支架', color:COLORS[3], priority:'P1', type:'定制单', start:iso(-5), end:iso(8), completed:false, expanded:true, tasks:[
+      { id:uid(), name:'项目 C', color:COLORS[3], priority:'P1', type:'定制单', start:iso(-5), end:iso(8), completed:false, expanded:true, tasks:[
         mkT('需求确认','P1',iso(-5),iso(-2),'PDM'),
         mkT('加工图','P1',iso(-1),iso(3),'设计'),
         mkT('出厂检验','P1',iso(4),iso(8),'测试')
