@@ -2165,7 +2165,7 @@ create policy "ppm own row" on ppm_workbench
       pagesCfg = { repo, login, token, url, publishedAt:new Date().toISOString() }; savePagesCfg();
       setPagesStatus('发布成功！固定地址已生成', 'ok');
       const info = $('pagesInfo'); info.classList.add('active');
-      info.innerHTML = '固定地址：<div class="pages-url"><a href="'+url+'" target="_blank" rel="noopener">'+url+'</a></div>仓库：'+login+'/'+repo+'<br>以后更新网站只需再次点击「发布到 GitHub Pages」，地址不变。';
+      info.innerHTML = '固定地址：<div class="pages-url"><a href="'+escapeHTML(url)+'" target="_blank" rel="noopener">'+escapeHTML(url)+'</a></div>仓库：'+escapeHTML(login)+'/'+escapeHTML(repo)+'<br>以后更新网站只需再次点击「发布到 GitHub Pages」，地址不变。';
       showToast('已发布到 GitHub Pages');
     }catch(e){
       const msg = String(e.message||e);
