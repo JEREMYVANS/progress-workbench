@@ -137,7 +137,9 @@
   .today-task-card.completed{opacity:.7}
   .today-task-card .tt-head{display:flex;align-items:center;gap:6px;margin-bottom:3px}
   .today-task-card .tt-name{flex:1;min-width:0;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
-  .today-task-card .tt-check{flex:none;width:16px;height:16px;accent-color:var(--success);cursor:pointer;border-radius:4px}
+  .today-task-card .tt-check{flex:none;width:16px;height:16px;cursor:pointer;border-radius:4px;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);background:var(--panel);display:grid;place-items:center;position:relative}
+  .today-task-card .tt-check:checked{background:var(--success);border-color:var(--success)}
+  .today-task-card .tt-check:checked::after{content:"✓";color:#fff;font-size:10px;font-weight:700;line-height:1}
   .today-task-card .tt-meta{color:var(--muted);font-size:10.5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   .today-task-card .tt-path{color:var(--soft);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .today-task-card.dragging{opacity:.5;cursor:grabbing}
@@ -168,26 +170,6 @@
     .topbar-right{justify-content:flex-end;gap:8px}
   }
 
-  /* ── Upcoming board ── */
-  .upcoming-board{border:0.5px solid var(--line);border-radius:var(--radius-xl);background:var(--panel);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
-  .upcoming-board[hidden]{display:none}
-  .upcoming-board-head{padding:16px 22px;border-bottom:0.5px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-  .upcoming-board-head h2{font-size:22px;line-height:1.15;letter-spacing:-.035em;font-weight:700}
-  .upcoming-board-head p{font-size:13px;color:var(--muted);margin:0}
-  .upcoming-board-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:16px 22px;align-items:start}
-  .upcoming-col{background:var(--panel2);border:0.5px solid var(--line);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column;min-height:40vh;position:relative}
-  .upcoming-col-head{padding:14px 14px 10px;font-weight:700;font-size:13.5px;color:var(--text);background:transparent;border-bottom:0;display:flex;align-items:center;justify-content:space-between}
-  .upcoming-col-head .col-count{height:20px;min-width:22px;padding:0 7px;border-radius:999px;background:var(--line);color:var(--muted);font-size:11px;font-weight:700;display:grid;place-items:center}
-  .upcoming-col-body{padding:8px 12px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
-  .upcoming-task-card{position:relative;padding:10px 12px 10px 14px;border:0.5px solid var(--line);border-radius:12px;background:var(--panel);font-size:13px;line-height:1.4;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s,transform .15s;box-shadow:var(--shadow-sm);overflow:hidden}
-  .upcoming-task-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--group-color,var(--bar-color,var(--blue)));opacity:.95}
-  .upcoming-task-card:hover{background:#fff;border-color:var(--line-strong);box-shadow:var(--shadow-hover);transform:translateY(-1px)}
-  html[data-theme="dark"] .upcoming-task-card:hover{background:rgba(58,58,60,.85)}
-  .upcoming-task-card .tt-name{font-weight:600;display:block;margin-bottom:4px;color:var(--text)}
-  .upcoming-task-card .tt-meta{color:var(--muted);font-size:11px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .upcoming-task-card .tt-path{color:var(--soft);font-size:10.5px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  @media(max-width:1240px){.upcoming-board-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:760px){.upcoming-board-grid{grid-template-columns:1fr}}
 
   /* ── Completed calendar ── */
   .completed-calendar{border:0.5px solid var(--line);border-radius:var(--radius-xl);background:var(--panel);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
@@ -232,6 +214,11 @@
   .zoom-panel label{font-size:11.5px;color:var(--muted);font-weight:600;white-space:nowrap}
   .zoom-btn{width:26px;height:26px;border:0;border-radius:50%;display:grid;place-items:center;background:rgba(94,92,230,.08);color:var(--olive);cursor:pointer;font-weight:600;font-size:13px;transition:background .15s,color .15s}
   .zoom-btn:hover{background:rgba(94,92,230,.15);color:#4f48d8}
+  #zoomRange{-webkit-appearance:none;appearance:none;width:110px;height:6px;border-radius:999px;background:var(--line);outline:none;cursor:pointer}
+  #zoomRange::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--olive);box-shadow:0 2px 6px rgba(94,92,230,.35);cursor:pointer}
+  #zoomRange::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--olive);box-shadow:0 2px 6px rgba(94,92,230,.35);cursor:pointer}
+  #zoomRange::-webkit-slider-runnable-track{height:6px;border-radius:999px;background:var(--line)}
+  #zoomRange::-moz-range-track{height:6px;border-radius:999px;background:var(--line)}
 
   .gantt-scroll{position:relative;overflow:auto;max-height:min(1060px,calc(100dvh - 120px));scroll-behavior:auto;cursor:grab;scrollbar-color:rgba(60,60,67,.25) transparent;scrollbar-width:thin;-webkit-overflow-scrolling:touch;touch-action:auto}
   html[data-theme="dark"] .gantt-scroll{scrollbar-color:rgba(255,255,255,.18) transparent}
@@ -327,7 +314,8 @@
   .overdue-roll.has-overdue{background:rgba(255,59,48,.10);color:var(--p0);border-color:rgba(255,59,48,.30);box-shadow:0 0 0 3px rgba(255,59,48,.08)}
   .overdue-roll.has-overdue:hover{background:rgba(255,59,48,.16);border-color:rgba(255,59,48,.36)}
   .today-task-card.grouped{background:var(--panel);border-left-color:var(--group-color)}
-  .today-task-card.grouped .group-dot{width:7px;height:7px;border-radius:50%;background:var(--group-color);display:inline-block;flex:none;box-shadow:0 0 0 2.5px color-mix(in srgb,var(--group-color) 18%,transparent)}
+  .today-task-card.grouped::before{width:4px;opacity:1}
+  .today-task-card.grouped .group-dot{width:9px;height:9px;border-radius:50%;background:var(--group-color);display:inline-block;flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--group-color) 24%,transparent)}
   .task-list{padding:14px 16px 18px;display:grid;gap:10px}
   .task-item{position:relative;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:12px 12px 12px 14px;border:0.5px solid var(--line);border-radius:14px;background:var(--panel);transition:background .15s,border-color .15s,box-shadow .15s;cursor:pointer;box-shadow:var(--shadow-sm);overflow:hidden}
   .task-item::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--bar-color,var(--blue));opacity:.95}
@@ -337,7 +325,9 @@
   .task-item.completed{border-color:rgba(52,199,89,.20);background:rgba(52,199,89,.04);opacity:.75}
   .task-item.completed .task-text strong{text-decoration:line-through;color:var(--muted)}
   .task-item.completed .task-text span{color:var(--soft)}
-  .task-item input{width:18px;height:18px;margin-top:3px;accent-color:var(--success);cursor:pointer}
+  .task-item input{width:18px;height:18px;margin-top:3px;cursor:pointer;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
+  .task-item input:checked{background:var(--success);border-color:var(--success)}
+  .task-item input:checked::after{content:"✓";color:#fff;font-size:11px;font-weight:700;line-height:1}
   .task-text{min-width:0;display:grid;gap:4px}
   .task-text .task-title{font-size:14px;font-weight:600;line-height:1.45;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .task-text .task-badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
@@ -367,7 +357,9 @@
   .progress-row .detail-progress{flex:1;min-width:0}
   .progress-check{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:0.5px solid var(--line);border-radius:999px;background:var(--panel2);font-size:12px;font-weight:600;color:var(--text);cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s;flex:none}
   .progress-check:hover{background:var(--panel);border-color:var(--line-strong)}
-  .progress-check input{width:18px;height:18px;accent-color:var(--success);cursor:pointer;flex:none;margin:0}
+  .progress-check input{width:18px;height:18px;cursor:pointer;flex:none;margin:0;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
+  .progress-check input:checked{background:var(--success);border-color:var(--success)}
+  .progress-check input:checked::after{content:"✓";color:#fff;font-size:11px;font-weight:700;line-height:1}
   .progress-check.checked{background:rgba(52,199,89,.10);border-color:rgba(52,199,89,.30);color:var(--success)}
   .child-progress .bar span{background:var(--bar-color,var(--olive))}
   .close{width:34px;height:34px;border:0;border-radius:50%;display:grid;place-items:center;background:rgba(60,60,67,.08);color:var(--muted);cursor:pointer;font-size:18px;transition:background .15s,color .15s}
@@ -392,7 +384,9 @@
   .detail-node .form-grid .field:nth-child(4){grid-column:1/3}
   .detail-node .form-grid .field:nth-child(5){grid-column:3/5}
   @media(max-width:760px){
-    .detail-node .form-grid{grid-template-columns:1fr}
+    .modal{padding:18px 16px}
+    .detail-node{padding:14px}
+    .detail-node .form-grid{grid-template-columns:1fr;gap:10px 12px}
     .detail-node .form-grid .field:nth-child(1),
     .detail-node .form-grid .field:nth-child(2),
     .detail-node .form-grid .field:nth-child(3),
@@ -402,10 +396,13 @@
   .field{display:grid;gap:6px}
   .field.full{grid-column:1/-1}
   .field.row{grid-template-columns:auto 1fr;align-items:center;gap:10px;margin-top:4px}
-  .field.row input[type=checkbox]{width:20px;height:20px;accent-color:var(--success);cursor:pointer}
+  .field.row input[type=checkbox]{width:20px;height:20px;cursor:pointer;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
+  .field.row input[type=checkbox]:checked{background:var(--success);border-color:var(--success)}
+  .field.row input[type=checkbox]:checked::after{content:"✓";color:#fff;font-size:12px;font-weight:700;line-height:1}
   .field.row label{color:var(--text);font-weight:600}
   .field label{font-size:11.5px;line-height:1.35;color:var(--muted);font-weight:600}
-  .field input,.field select{width:100%;min-height:40px;padding:9px 11px;border:0.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
+  .field input,.field select{width:100%;min-width:0;min-height:40px;padding:9px 11px;border:0.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
+  .field input[type="date"]{max-width:100%}
   .field input:focus,.field select:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
   .detail-progress{display:flex;align-items:center;gap:10px;margin-top:14px}
   .detail-progress .bar{flex:1;height:8px;border-radius:99px;background:rgba(60,60,67,.10);overflow:hidden}
@@ -425,7 +422,9 @@
   .child-card.completed{opacity:.62;background:var(--panel2)}
   .child-card:hover{background:#fff;border-color:var(--line-strong);box-shadow:var(--shadow-hover);transform:translateY(-1px)}
   html[data-theme="dark"] .child-card:hover{background:rgba(58,58,60,.85)}
-  .child-check{align-self:start;width:18px;height:18px;accent-color:var(--success);cursor:pointer;margin-top:2px;flex:none}
+  .child-check{align-self:start;width:18px;height:18px;cursor:pointer;margin-top:2px;flex:none;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
+  .child-check:checked{background:var(--success);border-color:var(--success)}
+  .child-check:checked::after{content:"✓";color:#fff;font-size:11px;font-weight:700;line-height:1}
   .child-body{min-width:0;display:flex;flex-direction:column;gap:6px}
   .child-top{display:flex;align-items:center;gap:8px;min-width:0;padding-right:56px}
   .child-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
@@ -545,7 +544,7 @@
   }
   </style><link rel="stylesheet" href="webkit-masked-url://hidden/"></head>
 <body class="modal-open">
-<header class="topbar"><div class="topbar-inner"><div class="brand"><div class="brand-mark">PD</div><div><h1>Project Dashboard</h1><p>项目进度 · 子任务 · 甘特图</p></div></div><div class="topbar-right"><nav class="nav-bar" id="navBar" aria-label="视图与快捷"><button type="button" class="nav-btn primary" data-view-key="today">今日待处理</button><button type="button" class="nav-btn" data-view-key="gantt">项目甘特图</button><button type="button" class="nav-btn" data-view-key="upcoming">Upcoming<span class="nav-count">6</span></button><button type="button" class="nav-btn" data-view-key="completed">已完成任务<span class="nav-count">27</span></button><button type="button" class="nav-btn" data-view-key="projects">全部项目<span class="nav-count">9</span></button><button type="button" class="nav-btn" data-view-key="archived">已归档<span class="nav-count">0</span></button></nav><nav class="actions" aria-label="工作台主要操作">
+<header class="topbar"><div class="topbar-inner"><div class="brand"><div class="brand-mark">PD</div><div><h1>Project Dashboard</h1><p>项目进度 · 子任务 · 甘特图</p></div></div><div class="topbar-right"><nav class="nav-bar" id="navBar" aria-label="视图与快捷"><button type="button" class="nav-btn primary" data-view-key="today">今日待处理</button><button type="button" class="nav-btn" data-view-key="gantt">项目甘特图</button><button type="button" class="nav-btn" data-view-key="completed">已完成任务<span class="nav-count">27</span></button><button type="button" class="nav-btn" data-view-key="projects">全部项目<span class="nav-count">9</span></button><button type="button" class="nav-btn" data-view-key="archived">已归档<span class="nav-count">0</span></button></nav><nav class="actions" aria-label="工作台主要操作">
   <button class="btn icon" id="refreshBtn" type="button" aria-label="刷新页面">↻</button>
   <div class="backup-wrap">
     <button class="btn" id="backupBtn" type="button" aria-haspopup="true" aria-expanded="false">备份</button>
@@ -574,9 +573,6 @@
     <section class="today-board" id="todayBoard" data-pane="today" aria-labelledby="todayTitle">
       <div class="today-board-head"><h2 id="todayTitle">今日待处理</h2><div class="today-head-actions"><button type="button" class="btn small overdue-roll" id="overdueRollBtn" title="将逾期任务截止日期全部调整为今天">逾期归今日</button></div><div class="today-date workday" id="todayDatePill"><span id="weekday">今天 · 周一 · 开工</span><strong id="todayText">8月31日</strong></div></div>
       <div class="today-board-grid" id="todayBoardGrid"><div class="today-col" data-prio="P0"><div class="today-col-head" data-prio="P0"><div class="col-head-left"><span class="col-title">P0 · 高优先级</span><span class="col-count">5</span></div><div class="col-sort" data-prio="P0"><button type="button" data-sort="type" class="">类型</button><button type="button" data-sort="project" class="active">项目</button><button type="button" data-sort="deadline" class="">截止</button><button type="button" data-sort="custom" class="">自定义</button></div></div><div class="today-col-body"><div class="today-task-card grouped" data-task="mt9xgu5h10lo4l" draggable="true" style="--group-color:#7c3aed"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">新增过滤框组件编码</span><input type="checkbox" class="tt-check" aria-label="完成 新增过滤框组件编码"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">20HP风管定制标配滤网 / 新增物料 / 新增过滤框组件</div></div><div class="today-task-card grouped" data-task="mt2jeh0dohwnjx" draggable="true" style="--group-color:#5e5ce6"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">统计机型</span><input type="checkbox" class="tt-check" aria-label="完成 统计机型"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">中静压切换纸箱</div></div><div class="today-task-card grouped" data-task="mt8cns6vnnenxp" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">支架图纸归档</span><input type="checkbox" class="tt-check" aria-label="完成 支架图纸归档"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:var(--blue)">设计</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">左接管切换直流水泵 / 新建支架物料</div></div><div class="today-task-card grouped" data-task="mt2pgcr46eyfcp" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">风机固定板图纸归档</span><input type="checkbox" class="tt-check" aria-label="完成 风机固定板图纸归档"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:var(--blue)">设计</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">左接管切换直流水泵 / 新建风机固定板</div></div><div class="today-task-card grouped" data-task="mtg07qm1yujuwb" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">运输跌落测试</span><input type="checkbox" class="tt-check" aria-label="完成 运输跌落测试"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#d97706">测试</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">左接管切换直流水泵</div></div></div></div><div class="today-col" data-prio="P1"><div class="today-col-head" data-prio="P1"><div class="col-head-left"><span class="col-title">P1 INBOX</span><span class="col-count">14</span></div><div class="col-sort" data-prio="P1"><button type="button" data-sort="type" class="">类型</button><button type="button" data-sort="project" class="active">项目</button><button type="button" data-sort="deadline" class="">截止</button><button type="button" data-sort="custom" class="">自定义</button></div></div><div class="today-col-body"><div class="today-task-card grouped" data-task="msyvrv5aydqi52" draggable="true" style="--group-color:#7c3aed"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">图纸归档</span><input type="checkbox" class="tt-check" aria-label="完成 图纸归档"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">20HP风管定制标配滤网 / 新增物料</div></div><div class="today-task-card grouped" data-task="msyvsh03dv29hh" draggable="true" style="--group-color:#7c3aed"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">打样申请</span><input type="checkbox" class="tt-check" aria-label="完成 打样申请"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#16a34a">装机</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">20HP风管定制标配滤网</div></div><div class="today-task-card grouped" data-task="msxednskkxtnqw" draggable="true" style="--group-color:#4f46e5"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">底盘和泡沫优化</span><input type="checkbox" class="tt-check" aria-label="完成 底盘和泡沫优化"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:var(--blue)">设计</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">新一代天花机 / 三维优化</div></div><div class="today-task-card grouped" data-task="mt2jewrhk4j47d" draggable="true" style="--group-color:#5e5ce6"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">新增物料--纸箱</span><input type="checkbox" class="tt-check" aria-label="完成 新增物料--纸箱"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/11</span></div><div class="tt-path">中静压切换纸箱</div></div><div class="today-task-card grouped" data-task="mszcn50pc5yqxq" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">发邮件-控制水泵固定板组件库存</span><input type="checkbox" class="tt-check" aria-label="完成 发邮件-控制水泵固定板组件库存"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#64748b">杂事</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/1</span></div><div class="tt-path">左接管切换直流水泵 / 新建支架物料</div></div><div class="today-task-card grouped" data-task="mt8co4x478rxik" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">物料确认</span><input type="checkbox" class="tt-check" aria-label="完成 物料确认"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/2</span></div><div class="tt-path">左接管切换直流水泵 / 新建支架物料</div></div><div class="today-task-card grouped" data-task="mszcq9t5xhggjo" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">成品检测试结果</span><input type="checkbox" class="tt-check" aria-label="完成 成品检测试结果"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#d97706">测试</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/2</span></div><div class="tt-path">左接管切换直流水泵 / 新建风机固定板</div></div><div class="today-task-card grouped" data-task="msyv96rvl66tc0" draggable="true" style="--group-color:#d97706"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">Q3面板投产</span><input type="checkbox" class="tt-check" aria-label="完成 Q3面板投产"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">ME XCT9 TD / Q3Q4面板投产</div></div><div class="today-task-card grouped" data-task="msyv9kv4yzuys1" draggable="true" style="--group-color:#d97706"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">Q4面板确认</span><input type="checkbox" class="tt-check" aria-label="完成 Q4面板确认"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/4</span></div><div class="tt-path">ME XCT9 TD / Q3Q4面板投产</div></div><div class="today-task-card grouped" data-task="mtgyq9cphrwkno" draggable="true" style="--group-color:#d97706"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">内机空壳处理</span><input type="checkbox" class="tt-check" aria-label="完成 内机空壳处理"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:var(--blue)">设计</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/4</span></div><div class="tt-path">ME XCT9 TD</div></div><div class="today-task-card grouped" data-task="mt1ar720rvte9f" draggable="true" style="--group-color:#16a34a"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">10-22.4kw 3C认证跟进</span><input type="checkbox" class="tt-check" aria-label="完成 10-22.4kw 3C认证跟进"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">SD(HDC+KA) / 10-33.5kw投产</div></div><div class="today-task-card grouped" data-task="mszfjgf4rchem4" draggable="true" style="--group-color:#16a34a"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">10-33.5kw对比BOM</span><input type="checkbox" class="tt-check" aria-label="完成 10-33.5kw对比BOM"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">SD(HDC+KA)</div></div><div class="today-task-card grouped" data-task="mszclqgrfd6qgn" draggable="true" style="--group-color:#0891b2"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">顶出风两器售后配件</span><input type="checkbox" class="tt-check" aria-label="完成 顶出风两器售后配件"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:var(--blue)">设计</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/30</span></div><div class="tt-path">XCT9 TD</div></div><div class="today-task-card grouped" data-task="mszcsqtlmeidom" draggable="true" style="--group-color:#e11d48"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">手册完善</span><input type="checkbox" class="tt-check" aria-label="完成 手册完善"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">XIAOZHI IDUs / 交流天花机维修手册</div></div></div></div><div class="today-col" data-prio="done"><div class="today-col-head" data-prio="done"><div class="col-head-left"><span class="col-title">今天完成 <span class="col-trophy" title="今日战绩">🏆</span></span><span class="col-count">3</span></div><div class="col-sort" data-prio="done"><button type="button" data-sort="type" class="active">类型</button><button type="button" data-sort="project" class="">项目</button><button type="button" data-sort="deadline" class="">截止</button><button type="button" data-sort="custom" class="">自定义</button></div></div><div class="today-col-body"><div class="today-task-card completed grouped" data-task="mtgvn0ix8d0g6o" draggable="true" style="--group-color:#9333ea"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">修改Guide Specs</span><input type="checkbox" class="tt-check" checked="" aria-label="完成 修改Guide Specs"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#9333ea">手册</span><span class="priority-badge" style="background:var(--success)">完成</span><span>截止 2026/8/31</span></div><div class="tt-path">ME XCT9 TD</div></div><div class="today-task-card completed grouped" data-task="mt9xgeuln16k3g" draggable="true" style="--group-color:#64748b"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">咨询组装送货（拓盛）</span><input type="checkbox" class="tt-check" checked="" aria-label="完成 咨询组装送货（拓盛）"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#64748b">杂事</span><span class="priority-badge" style="background:var(--success)">完成</span><span>截止 2026/8/31</span></div><div class="tt-path">20HP风管定制标配滤网 / 新增物料 / 新增过滤框组件</div></div><div class="today-task-card completed grouped" data-task="mtcltejpx8wvy2" draggable="true" style="--group-color:#0891b2"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">新建支架编码</span><input type="checkbox" class="tt-check" checked="" aria-label="完成 新建支架编码"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--success)">完成</span><span>截止 2026/8/31</span></div><div class="tt-path">左接管切换直流水泵 / 新建支架物料</div></div></div></div></div>
-    </section>
-    <section class="upcoming-board" id="upcomingBoard" data-pane="upcoming" aria-labelledby="upcomingTitle" hidden="">
-      <div class="upcoming-board-grid" id="upcomingBoardGrid"></div>
     </section>
     <section class="completed-calendar" id="completedCalendar" data-pane="completed" aria-labelledby="completedTitle" hidden="">
       <div class="completed-calendar-head"><h2 id="completedTitle">已完成任务日历</h2>
@@ -766,7 +762,6 @@ create policy "ppm own row" on ppm_workbench
   const els = {
     monitor: $('navBar'), timeline:$('timeline'), rows:$('projectRows'), ganttScroll:$('ganttScroll'),
     navBar:$('navBar'), mainGrid:$('mainGrid'), workspace:$('workspace'), todayBoard:$('todayBoard'), todayBoardGrid:$('todayBoardGrid'),
-    upcomingBoard:$('upcomingBoard'), upcomingBoardGrid:$('upcomingBoardGrid'),
     completedCalendar:$('completedCalendar'), completedCalendarGrid:$('completedCalendarGrid'), calMonthLabel:$('calMonthLabel'),
     taskList:$('taskList'), toast:$('toast'), detailModal:$('detailModal'), detailBody:$('detailBody'),
     detailBreadcrumb:$('detailBreadcrumb'), detailBack:$('detailBack'), confirmModal:$('confirmModal'),
@@ -1131,7 +1126,7 @@ create policy "ppm own row" on ppm_workbench
   }
 
   /* ---------- 渲染 ---------- */
-  function render(){ renderNav(); renderTimeline(); renderRows(); renderTodayBoard(); renderUpcomingBoard(); renderCompletedCalendar(); renderDate(); renderScaleTabs(); }
+  function render(){ renderNav(); renderTimeline(); renderRows(); renderTodayBoard(); renderCompletedCalendar(); renderDate(); renderScaleTabs(); }
 
   function renderNav(){
     const total = data.projects.length;
@@ -1139,15 +1134,9 @@ create policy "ppm own row" on ppm_workbench
     const allTasks = data.projects.reduce((s,p)=>s+getAllDeep(p.tasks).length,0);
     const inProgress = data.projects.reduce((s,p)=>s+getAllDeep(p.tasks).filter(t=>!t.completed).length,0);
     const completed = allTasks - inProgress;
-    const upcoming = data.projects.reduce((s,p)=>s+getAllDeep(p.tasks).filter(t=>{
-      if(t.completed || (t.tasks && t.tasks.length)) return false;
-      const start = parseISO(t.start);
-      return start && start > todayDate;
-    }).length,0);
     const buttons = [
       { key:'today',     label:'今日待处理', primary:viewMode==='today' },
       { key:'gantt',     label:'项目甘特图', primary:viewMode==='gantt' },
-      { key:'upcoming',  label:'Upcoming', count:upcoming, primary:viewMode==='upcoming' },
       { key:'completed', label:'已完成任务', primary:viewMode==='completed', count:completed },
       { key:'projects',  label:'全部项目',   count:total },
       { key:'archived',  label:'已归档',      count:archived },
@@ -1156,7 +1145,7 @@ create policy "ppm own row" on ppm_workbench
     els.navBar.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click', ()=>setViewMode(btn.dataset.viewKey)));
   }
   function setViewMode(key){
-    if(key === 'gantt' || key === 'today' || key === 'completed' || key === 'upcoming'){ viewMode = key; applyViewMode(); return; }
+    if(key === 'gantt' || key === 'today' || key === 'completed'){ viewMode = key; applyViewMode(); return; }
     if(key === 'projects'){ openProjectListModal(); return; }
     if(key === 'archived'){ openArchivedModal(); return; }
   }
@@ -1165,9 +1154,7 @@ create policy "ppm own row" on ppm_workbench
     els.mainGrid.dataset.view = viewMode;
     els.workspace.hidden = (viewMode !== 'gantt');
     els.todayBoard.hidden = (viewMode !== 'today');
-    els.upcomingBoard.hidden = (viewMode !== 'upcoming');
     els.completedCalendar.hidden = (viewMode !== 'completed');
-    if(viewMode === 'upcoming') renderUpcomingBoard();
     if(viewMode === 'completed') renderCompletedCalendar();
 
     if(viewMode === 'today') renderTodayBoard();
@@ -1315,8 +1302,12 @@ create policy "ppm own row" on ppm_workbench
 
   function simpleHash(str){ let h=0; for(let i=0;i<str.length;i++){ h=(h<<5)-h+str.charCodeAt(i); h|=0; } return Math.abs(h); }
   function nameColor(str){
-    const hue = simpleHash(str)%360;
-    return `hsl(${hue} 72% 52%)`;
+    const h = simpleHash(str);
+    const hues = [0,30,55,120,165,200,210,240,270,300,325,340];
+    const hue = hues[h % hues.length];
+    const sat = 72 + (h % 3) * 6; // 72–84
+    const light = 48 + (h % 3) * 4; // 48–56
+    return `hsl(${hue} ${sat}% ${light}%)`;
   }
   function groupInfoFor(it, mode){
     if(!mode || mode==='custom') return null; // 自定义：不自动上色，靠手动拖拽顺序区分
@@ -1517,50 +1508,6 @@ create policy "ppm own row" on ppm_workbench
     });
   }
 
-  function renderUpcomingBoard(){
-    if(!els.upcomingBoard || els.upcomingBoard.hidden) return;
-    const items=[];
-    data.projects.forEach(p=>{
-      getAllDeep(p.tasks).forEach(t=>{
-        if(t.completed || (t.tasks && t.tasks.length)) return;
-        const start = parseISO(t.start);
-        if(!start || start <= todayDate) return;
-        const proj = findProjectOf(t.id);
-        const pathNames = findNodePath(t.id).map(id=>{
-          const n = id===p.id ? p : getNode(id, [p]);
-          return n ? n.name : '';
-        }).slice(0,-1);
-        const pathLabel = pathNames.length > 1 ? pathNames.join(' / ') : (pathNames[0] || (proj?proj.name:''));
-        items.push({task:t, proj, pathLabel, start});
-      });
-    });
-    const w7 = new Date(todayDate); w7.setDate(w7.getDate()+7);
-    const w14 = new Date(todayDate); w14.setDate(w14.getDate()+14);
-    const groups = { week:[], nextWeek:[], later:[], noDate:[] };
-    items.forEach(it=>{
-      if(it.start <= w7) groups.week.push(it);
-      else if(it.start <= w14) groups.nextWeek.push(it);
-      else groups.later.push(it);
-    });
-    // 无开始日期的任务不进入 upcoming 计数，此处不显示
-    groups.week.sort((a,b)=>a.start-b.start);
-    groups.nextWeek.sort((a,b)=>a.start-b.start);
-    groups.later.sort((a,b)=>a.start-b.start);
-    const titles = { week:'未来 7 天', nextWeek:'未来 8–14 天', later:'更晚' };
-    const order = ['week','nextWeek','later'];
-    els.upcomingBoardGrid.innerHTML = order.map(k=>{
-      const list = groups[k];
-      const cards = list.length ? list.map(it=>{
-        const cls = 'upcoming-task-card';
-        const prioBadge = `<span class="priority-badge" style="background:${PRIORITY_COLOR[it.task.priority]||PRIORITY_COLOR.P1}">${it.task.priority}</span>`;
-        const typeBadge = `<span class="type-badge" style="background:${TASK_TYPE_COLOR[it.task.type]||'#64748b'}">${escapeHTML(it.task.type||'设计')}</span>`;
-        const pathLine = it.pathLabel ? `<div class="tt-path">${escapeHTML(it.pathLabel)}</div>` : '';
-        return `<div class="${cls}" data-task="${it.task.id}"><span class="tt-name">${escapeHTML(it.task.name)}</span><div class="tt-meta">${prioBadge}${typeBadge}<span>开始 ${formatDateSlash(it.task.start)}</span></div>${pathLine}</div>`;
-      }).join('') : '<div class="empty-state" style="padding:24px 10px"><span class="empty-state-mark">·</span><p style="font-size:12px">暂无任务</p></div>';
-      return `<div class="upcoming-col"><div class="upcoming-col-head"><span>${titles[k]}</span><span class="col-count">${list.length}</span></div><div class="upcoming-col-body">${cards}</div></div>`;
-    }).join('');
-  }
-
   function renderCompletedCalendar(){
     if(!els.completedCalendar || els.completedCalendar.hidden) return;
     const year = completedCalMonth.getFullYear(), month = completedCalMonth.getMonth();
@@ -1678,10 +1625,16 @@ create policy "ppm own row" on ppm_workbench
 
   function currentNode(){ return detailPath.length ? getNode(detailPath[detailPath.length-1]) : null; }
 
+  function sortDetailChildren(children){
+    const pending=[], done=[];
+    (children||[]).forEach(c=>{ (c.completed?done:pending).push(c); });
+    return pending.concat(done);
+  }
+
   function renderDetail(){
     const isNew = detailNewProject;
     const node = currentNode();
-    const children = node ? (node.tasks||[]) : [];
+    const children = node ? sortDetailChildren(node.tasks||[]) : [];
     const isProject = isNew || (node && data.projects.some(p=>p.id===node.id));
     const progress = isNew ? 0 : Math.round(calcProgress(node)*100);
     const color = isNew ? detailDraft.color : (node.color || COLORS[0]);
@@ -2114,7 +2067,6 @@ create policy "ppm own row" on ppm_workbench
     const mg = clone.querySelector('#mainGrid'); if(mg) mg.dataset.view = 'today';
     const ws = clone.querySelector('#workspace'); if(ws){ ws.setAttribute('hidden',''); ws.hidden = true; }
     const tb = clone.querySelector('#todayBoard'); if(tb){ tb.removeAttribute('hidden'); tb.hidden = false; }
-    const ub = clone.querySelector('#upcomingBoard'); if(ub){ ub.setAttribute('hidden',''); ub.hidden = true; }
     const cc = clone.querySelector('#completedCalendar'); if(cc){ cc.setAttribute('hidden',''); cc.hidden = true; }
     clone.querySelectorAll('.nav-btn.primary').forEach(btn => btn.classList.remove('primary'));
     const todayBtn = clone.querySelector('[data-view-key="today"].nav-btn'); if(todayBtn) todayBtn.classList.add('primary');
@@ -2337,7 +2289,6 @@ create policy "ppm own row" on ppm_workbench
       if(sb){ const prio = sb.closest('.col-sort').dataset.prio; if(!data.todaySort) data.todaySort={P0:'type',P1:'type',done:'type'}; if(!data.todayManual) data.todayManual={P0:[],P1:[],done:[]}; data.todaySort[prio]=sb.dataset.sort; saveData(); renderTodayBoard(); return; }
       if(window.__todayDragging) return; if(e.target.matches('input[type=checkbox]')) return; const item=e.target.closest('[data-task]'); if(item){ openDetail(item.dataset.task); }
     });
-    els.upcomingBoardGrid.addEventListener('click', e=>{ const item=e.target.closest('[data-task]'); if(item){ openDetail(item.dataset.task); } });
 
     // 已完成任务日历：月份切换、展开键、点击任务打开详情
     $('prevCalMonthBtn').addEventListener('click', ()=>{ completedCalMonth = new Date(completedCalMonth.getFullYear(), completedCalMonth.getMonth()-1, 1); renderCompletedCalendar(); });
