@@ -214,9 +214,9 @@
   .zoom-panel label{font-size:11.5px;color:var(--muted);font-weight:600;white-space:nowrap}
   .zoom-btn{width:26px;height:26px;border:0;border-radius:50%;display:grid;place-items:center;background:rgba(94,92,230,.08);color:var(--olive);cursor:pointer;font-weight:600;font-size:13px;transition:background .15s,color .15s}
   .zoom-btn:hover{background:rgba(94,92,230,.15);color:#4f48d8}
-  #zoomRange{-webkit-appearance:none;appearance:none;width:110px;height:16px;border-radius:999px;background:transparent;outline:none;cursor:pointer;vertical-align:middle}
-  #zoomRange::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;margin:0;border-radius:50%;background:var(--olive);box-shadow:0 2px 6px rgba(94,92,230,.35);cursor:pointer}
-  #zoomRange::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--olive);box-shadow:0 2px 6px rgba(94,92,230,.35);cursor:pointer}
+  #zoomRange{-webkit-appearance:none;appearance:none;width:110px;height:6px;border-radius:999px;background:transparent;outline:none;cursor:pointer;position:relative}
+  #zoomRange::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;margin-top:-5px;border-radius:50%;background:var(--olive);box-shadow:0 2px 6px rgba(94,92,230,.35);cursor:pointer}
+  #zoomRange::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--olive);box-shadow:0 2px 6px rgba(94,92,230,.35);cursor:pointer;margin-top:-5px}
   #zoomRange::-webkit-slider-runnable-track{height:6px;border-radius:999px;background:var(--line)}
   #zoomRange::-moz-range-track{height:6px;border-radius:999px;background:var(--line)}
 
@@ -351,7 +351,9 @@
   .modal-head .close{position:absolute;right:0;top:50%;transform:translateY(-50%)}
   .modal-title-wrap{text-align:center;max-width:calc(100% - 100px)}
   .progress-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;width:100%}
-  .progress-row .detail-progress{flex:none;width:clamp(180px,55%,260px);min-width:0}
+  .progress-row .detail-progress{flex:none;width:clamp(180px,55%,260px);min-width:0;margin-top:0}
+  .progress-row .progress-check{align-self:center}
+  .progress-row .detail-progress .val{line-height:1}
   .progress-check{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:0.5px solid var(--line);border-radius:999px;background:var(--panel2);font-size:12px;font-weight:600;color:var(--text);cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s;flex:none}
   .progress-check:hover{background:var(--panel);border-color:var(--line-strong)}
   .progress-check input{width:18px;height:18px;cursor:pointer;flex:none;margin:0;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
@@ -390,7 +392,7 @@
     .detail-node .form-grid .field:nth-child(4),
     .detail-node .form-grid .field:nth-child(5){grid-column:auto}
   }
-  .field{display:grid;gap:6px}
+  .field{display:grid;gap:6px;min-width:0}
   .field.full{grid-column:1/-1}
   .field.row{grid-template-columns:auto 1fr;align-items:center;gap:10px;margin-top:4px}
   .field.row input[type=checkbox]{width:20px;height:20px;cursor:pointer;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
@@ -399,8 +401,8 @@
   .field.row label{color:var(--text);font-weight:600}
   .field label{font-size:11.5px;line-height:1.35;color:var(--muted);font-weight:600}
   .field input,.field select{width:100%;min-width:0;min-height:40px;padding:9px 11px;border:0.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
-  .field input[type="date"]{max-width:100%;min-width:0!important;box-sizing:border-box}
-  @media(max-width:760px){.field input[type="date"]{padding-left:8px;padding-right:8px;font-size:15px}}
+  .field input[type="date"]{max-width:100%;min-width:0!important;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis}
+  @media(max-width:760px){.detail-node{padding:12px}.field input[type="date"]{padding-left:6px;padding-right:6px;font-size:14px;-webkit-text-size-adjust:100%}}
   .field input:focus,.field select:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
   .detail-progress{display:flex;align-items:center;gap:10px;margin-top:14px}
   .detail-progress .bar{flex:1;height:8px;border-radius:99px;background:rgba(60,60,67,.10);overflow:hidden}
