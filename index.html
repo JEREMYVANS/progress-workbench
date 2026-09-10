@@ -214,8 +214,8 @@
   .zoom-panel label{font-size:11.5px;color:var(--muted);font-weight:600;white-space:nowrap}
   .zoom-btn{width:26px;height:26px;border:0;border-radius:50%;display:grid;place-items:center;background:rgba(94,92,230,.08);color:var(--olive);cursor:pointer;font-weight:600;font-size:13px;transition:background .15s,color .15s}
   .zoom-btn:hover{background:rgba(94,92,230,.15);color:#4f48d8}
-  #zoomRange{-webkit-appearance:none;appearance:none;width:110px;height:6px;border-radius:999px;background:var(--line);outline:none;cursor:pointer}
-  #zoomRange::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--olive);box-shadow:0 2px 6px rgba(94,92,230,.35);cursor:pointer}
+  #zoomRange{-webkit-appearance:none;appearance:none;width:110px;height:16px;border-radius:999px;background:transparent;outline:none;cursor:pointer;vertical-align:middle}
+  #zoomRange::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;margin:0;border-radius:50%;background:var(--olive);box-shadow:0 2px 6px rgba(94,92,230,.35);cursor:pointer}
   #zoomRange::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--olive);box-shadow:0 2px 6px rgba(94,92,230,.35);cursor:pointer}
   #zoomRange::-webkit-slider-runnable-track{height:6px;border-radius:999px;background:var(--line)}
   #zoomRange::-moz-range-track{height:6px;border-radius:999px;background:var(--line)}
@@ -266,20 +266,17 @@
   .project-lane::before{content:"";position:absolute;inset:0 auto 0 calc(var(--today-index) * var(--unit));width:var(--unit);background:rgba(94,92,230,.07);pointer-events:none}
 
   /* ── Gantt bar (Apple-style pill) ── */
-  .gantt-bar{position:absolute;left:var(--bar-left);top:50%;width:var(--bar-width);height:38px;min-width:14px;transform:translateY(-50%);display:grid;grid-template-rows:auto auto;align-content:center;gap:2px;padding:5px 12px;border:0;border-radius:19px;background:var(--bar-color,var(--blue));color:#fff;box-shadow:0 4px 12px rgba(15,23,42,.18);overflow:visible;cursor:grab;touch-action:pan-x pan-y;user-select:none;z-index:6;transition:box-shadow .2s,scale .15s,filter .15s}
+  .gantt-bar{position:absolute;left:var(--bar-left);top:50%;width:var(--bar-width);height:38px;min-width:14px;transform:translateY(-50%);display:grid;grid-template-rows:auto auto;align-content:center;gap:2px;padding:5px 44px 5px 12px;border:0;border-radius:19px;background:var(--bar-color,var(--blue));color:#fff;box-shadow:0 4px 12px rgba(15,23,42,.18);overflow:visible;cursor:grab;touch-action:pan-x pan-y;user-select:none;z-index:6;transition:box-shadow .2s,scale .15s,filter .15s}
   .gantt-bar:hover{box-shadow:0 8px 22px rgba(15,23,42,.28);filter:brightness(1.05)}
   .gantt-bar:active{scale:.992}
   .gantt-bar.dragging{cursor:grabbing;z-index:50;scale:1.008;box-shadow:0 14px 32px rgba(15,23,42,.35);transition:none;filter:none}
   .gantt-bar.invalid{outline:2px solid rgba(225,29,72,.55);outline-offset:1px}
   .bar-stage-tag{display:inline-flex;align-items:center;justify-self:start;max-width:100%;height:14px;padding:0 6px;border-radius:7px;background:rgba(255,255,255,.22);color:rgba(255,255,255,.95);font-size:9px;font-weight:600;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.02em}
-  .bar-title{display:block;min-width:0;max-width:100%;align-self:center;font-size:12px;line-height:1.25;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .bar-meta{position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;color:var(--muted);font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none}
-  html[data-theme="dark"] .bar-meta{color:rgba(255,255,255,.7)}
+  .bar-title{display:block;min-width:0;max-width:calc(100% - 36px);align-self:center;font-size:12px;line-height:1.25;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .bar-progress-bg{position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:inherit;z-index:1}
   .bar-progress-fill{height:100%;background:rgba(0,0,0,.22)}
   .bar-stage-tag,.bar-title{position:relative;z-index:3}
-  .bar-percent{font-size:13px;font-weight:700;color:var(--text)}
-  html[data-theme="dark"] .bar-percent{color:rgba(255,255,255,.95)}
+  .bar-percent{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25);z-index:3;pointer-events:none;white-space:nowrap}
   .resize-handle{position:absolute;top:0;width:10px;height:100%;cursor:ew-resize;z-index:8}
   .resize-handle.left{left:0}.resize-handle.right{right:0}
   .edge-marker{position:absolute;top:50%;transform:translateY(-50%);width:28px;height:28px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--bar-color,var(--blue));color:#fff;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(15,23,42,.25);z-index:7}
@@ -353,8 +350,8 @@
   .modal-head .back{position:absolute;left:0;top:50%;transform:translateY(-50%)}
   .modal-head .close{position:absolute;right:0;top:50%;transform:translateY(-50%)}
   .modal-title-wrap{text-align:center;max-width:calc(100% - 100px)}
-  .progress-row{display:flex;align-items:center;gap:12px;margin-top:14px}
-  .progress-row .detail-progress{flex:1;min-width:0}
+  .progress-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;width:100%}
+  .progress-row .detail-progress{flex:none;width:clamp(180px,55%,260px);min-width:0}
   .progress-check{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:0.5px solid var(--line);border-radius:999px;background:var(--panel2);font-size:12px;font-weight:600;color:var(--text);cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s;flex:none}
   .progress-check:hover{background:var(--panel);border-color:var(--line-strong)}
   .progress-check input{width:18px;height:18px;cursor:pointer;flex:none;margin:0;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
@@ -376,8 +373,8 @@
   .breadcrumb .cur{color:var(--text);font-weight:700;font-size:17px;line-height:1.4}
 
   .detail-node{border:0.5px solid var(--line);border-radius:14px;background:var(--panel2);padding:16px;margin-bottom:16px}
-  .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 14px}
-  .detail-node .form-grid{grid-template-columns:repeat(4,1fr)}
+  .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px}
+  .detail-node .form-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
   .detail-node .form-grid .field:nth-child(1){grid-column:1/3}
   .detail-node .form-grid .field:nth-child(2){grid-column:3/4}
   .detail-node .form-grid .field:nth-child(3){grid-column:4/5}
@@ -386,7 +383,7 @@
   @media(max-width:760px){
     .modal{padding:18px 16px}
     .detail-node{padding:14px}
-    .detail-node .form-grid{grid-template-columns:1fr;gap:10px 12px}
+    .detail-node .form-grid{grid-template-columns:minmax(0,1fr);gap:10px 12px}
     .detail-node .form-grid .field:nth-child(1),
     .detail-node .form-grid .field:nth-child(2),
     .detail-node .form-grid .field:nth-child(3),
@@ -402,7 +399,8 @@
   .field.row label{color:var(--text);font-weight:600}
   .field label{font-size:11.5px;line-height:1.35;color:var(--muted);font-weight:600}
   .field input,.field select{width:100%;min-width:0;min-height:40px;padding:9px 11px;border:0.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
-  .field input[type="date"]{max-width:100%}
+  .field input[type="date"]{max-width:100%;min-width:0!important;box-sizing:border-box}
+  @media(max-width:760px){.field input[type="date"]{padding-left:8px;padding-right:8px;font-size:15px}}
   .field input:focus,.field select:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
   .detail-progress{display:flex;align-items:center;gap:10px;margin-top:14px}
   .detail-progress .bar{flex:1;height:8px;border-radius:99px;background:rgba(60,60,67,.10);overflow:hidden}
@@ -1217,7 +1215,7 @@ create policy "ppm own row" on ppm_workbench
     if(range.outside){
       bar=`<button type="button" class="edge-marker ${range.outside}" data-locate="${p.id}" style="--bar-color:${color}" aria-label="定位到${escapeHTML(p.name)}">${range.outside==='left'?'←':'→'}</button>`;
     } else {
-      bar=`<article class="gantt-bar" tabindex="0" role="button" data-id="${p.id}" data-dragged="false" data-start-index="${range.startIndex}" data-end-index="${range.endIndex}" style="--bar-left:${range.left}px;--bar-width:${range.width}px;--bar-color:${color}"><div class="bar-progress-bg" aria-hidden="true"><div class="bar-progress-fill" style="width:${progress}%"></div></div><span class="resize-handle left" data-resize="left" aria-hidden="true"></span><span class="resize-handle right" data-resize="right" aria-hidden="true"></span><span class="bar-stage-tag">${escapeHTML(p.type||'项目')} · ${escapeHTML(stage)}</span><span class="bar-title">${escapeHTML(p.name)}</span><div class="bar-meta"><span class="bar-date">${formatDate(p.start)} · ${formatDate(p.end)}</span><span class="bar-percent">${progress}%</span></div></article>`;
+      bar=`<article class="gantt-bar" tabindex="0" role="button" data-id="${p.id}" data-dragged="false" data-start-index="${range.startIndex}" data-end-index="${range.endIndex}" style="--bar-left:${range.left}px;--bar-width:${range.width}px;--bar-color:${color}"><div class="bar-progress-bg" aria-hidden="true"><div class="bar-progress-fill" style="width:${progress}%"></div></div><span class="resize-handle left" data-resize="left" aria-hidden="true"></span><span class="resize-handle right" data-resize="right" aria-hidden="true"></span><span class="bar-stage-tag">${escapeHTML(p.type||'项目')} · ${escapeHTML(stage)}</span><span class="bar-title">${escapeHTML(p.name)}</span><span class="bar-percent">${progress}%</span></article>`;
     }
     return `<div class="project-row${archived?' archived':''}" data-project="${p.id}" draggable="true"><div class="project-list-cell"><button type="button" class="project-list-card" data-open-project="${p.id}" style="--bar-color:${color}" aria-label="查看 ${escapeHTML(p.name)}"><span class="project-title">${escapeHTML(p.name)}</span><div class="project-meta"><div class="project-meta-left"><span class="priority-badge" style="background:${PRIORITY_COLOR[p.priority]}">${p.priority}</span><span class="type-badge" style="background:${PROJECT_TYPE_COLOR[p.type]||'var(--olive)'}">${escapeHTML(p.type||'项目')}</span><span class="stage-dot">${escapeHTML(stage)}</span></div><div class="project-meta-right"><span>截止 ${formatDateSlash(due)}</span><span>${progress}%</span></div></div><div class="project-progress"><span style="width:${progress}%"></span></div></button></div><div class="project-lane" data-project="${p.id}">${bar}</div></div>`;
   }
