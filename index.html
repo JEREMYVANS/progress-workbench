@@ -137,6 +137,7 @@
   .today-task-card.completed{opacity:.7}
   .today-task-card .tt-head{display:flex;align-items:center;gap:6px;margin-bottom:3px}
   .today-task-card .tt-name{flex:1;min-width:0;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+  .today-group-sep{grid-column:1/-1;border-top:0.5px solid var(--line);margin:6px 0;padding:0;height:0;opacity:.7}
   .today-task-card .tt-check{flex:none;width:16px;height:16px;cursor:pointer;border-radius:4px;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);background:var(--panel);display:grid;place-items:center;position:relative}
   .today-task-card .tt-check:checked{background:var(--success);border-color:var(--success)}
   .today-task-card .tt-check:checked::after{content:"✓";color:#fff;font-size:10px;font-weight:700;line-height:1}
@@ -350,10 +351,12 @@
   .modal-head .back{position:absolute;left:0;top:50%;transform:translateY(-50%)}
   .modal-head .close{position:absolute;right:0;top:50%;transform:translateY(-50%)}
   .modal-title-wrap{text-align:center;max-width:calc(100% - 100px)}
-  .progress-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;width:100%}
-  .progress-row .detail-progress{flex:none;width:clamp(180px,55%,260px);min-width:0;margin-top:0}
-  .progress-row .progress-check{align-self:center}
+  .progress-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;width:100%}
+  .progress-row .detail-progress{flex:1;min-width:140px;max-width:260px;margin-top:0}
+  .progress-row .progress-check{align-self:center;flex:none}
+  .progress-row .delete-node-btn{flex:none}
   .progress-row .detail-progress .val{line-height:1}
+  @media(max-width:760px){.progress-row{justify-content:center;gap:10px}.progress-row .detail-progress{max-width:220px}}
   .progress-check{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:0.5px solid var(--line);border-radius:999px;background:var(--panel2);font-size:12px;font-weight:600;color:var(--text);cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s;flex:none}
   .progress-check:hover{background:var(--panel);border-color:var(--line-strong)}
   .progress-check input{width:18px;height:18px;cursor:pointer;flex:none;margin:0;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
@@ -739,6 +742,12 @@ create policy "ppm own row" on ppm_workbench
   const TASK_TYPES = ['PDM','设计','测试','装机','杂事','手册'];
   const PROJECT_TYPE_COLOR = { '项目':'var(--olive)', '定制单':'#7c3aed' };
   const TASK_TYPE_COLOR = { 'PDM':'#0891b2', '设计':'var(--blue)', '测试':'#d97706', '装机':'#16a34a', '杂事':'#64748b', '手册':'#9333ea' };
+  function typeColor(type){
+    const t = String(type||'').trim();
+    if(TASK_TYPE_COLOR[t]) return TASK_TYPE_COLOR[t];
+    if(!t) return '#64748b';
+    return nameColor(t);
+  }
 
   let data = { projects: [] };
   let syncCfg = { enabled:false, url:'', anonKey:'', email:'', userId:'' }; // Supabase 账户级同步配置
@@ -788,6 +797,11 @@ create policy "ppm own row" on ppm_workbench
   function priorityText(p){ return p==='P0'?'高':p==='P1'?'中':'低'; }
 
   /* ---------- 数据与树 ---------- */
+  function registerCustomType(t){
+    t = String(t||'').trim();
+    if(!t) return;
+    if(!TASK_TYPES.includes(t) && !(data.customTypes||[]).includes(t)){ data.customTypes.push(t); saveData(); }
+  }
   function normalizeTypes(list, isProject){
     (list||[]).forEach(n=>{
       if(!n.type || !String(n.type).trim()) n.type = isProject ? '项目' : '设计';
@@ -817,6 +831,7 @@ create policy "ppm own row" on ppm_workbench
     if(!data.todaySort) data.todaySort = { P0:'type', P1:'type', done:'type' };
     else if(data.todaySort.P0==='deadline'&&data.todaySort.P1==='deadline'&&data.todaySort.done==='deadline'){ data.todaySort = { P0:'type', P1:'type', done:'type' }; } // 旧默认 deadline 自动迁移为「类型」
     if(!data.todayManual) data.todayManual = { P0:[], P1:[], done:[] };
+    if(!data.customTypes || !Array.isArray(data.customTypes)) data.customTypes = [];
     lastSavedAt = data._savedAt || 0;
     if(syncCfg.enabled){ loadSbAuth(); if(sbAuthed()) await pullRemote(true); } // 启动拉取云端（含登录凭据自动续期）
     saveData(true, true); // 启动时只写本地且不刷新时间戳，避免"未修改的启动"显得比云端新
@@ -1312,7 +1327,7 @@ create policy "ppm own row" on ppm_workbench
   function groupInfoFor(it, mode){
     if(!mode || mode==='custom') return null; // 自定义：不自动上色，靠手动拖拽顺序区分
     if(mode==='project'){ const proj=it.proj; return proj ? {key:proj.id, color:proj.color||nameColor(proj.id), label:proj.name} : null; }
-    if(mode==='type'){ const t=it.task.type||'设计'; return {key:t, color:TASK_TYPE_COLOR[t]||'#64748b', label:t}; }
+    if(mode==='type'){ const t=it.task.type||'设计'; return {key:t, color:typeColor(t), label:t}; }
     if(mode==='deadline'){ const d=it.task.end||'未定'; return {key:d, color:nameColor(d), label:'截止 '+formatDateSlash(d)}; }
     return null;
   }
@@ -1387,19 +1402,25 @@ create policy "ppm own row" on ppm_workbench
     els.todayBoardGrid.innerHTML = ['P0','P1','done'].map(k=>{
       const mode = colMode(k);                       // 该列所选排序维度，同时驱动卡片打底色
       const list = sortItems(groups[k], k);
-      const cards = list.length ? list.map(it=>{
-        const g = groupInfoFor(it, mode);
-        const cls = 'today-task-card'+(it.isOverdue?' overdue':'')+(it.completed?' completed':'')+(g?' grouped':'');
-        const groupStyle = g ? ` style="--group-color:${g.color}"` : '';
-        const groupDot = g ? '<span class="group-dot"></span>' : '';
-        const prioBadge = `<span class="priority-badge" style="background:${PRIORITY_COLOR[it.task.priority]||PRIORITY_COLOR.P1}">${it.task.priority}</span>`;
-        const typeBadge = `<span class="type-badge" style="background:${TASK_TYPE_COLOR[it.task.type]||'#64748b'}">${escapeHTML(it.task.type||'设计')}</span>`;
-        const statusBadge = it.completed?'<span class="priority-badge" style="background:var(--success)">完成</span>':(it.isOverdue?'<span class="priority-badge" style="background:var(--p0)">逾期</span>':'<span class="priority-badge" style="background:var(--olive)">今天</span>');
-        const pathLine = it.pathLabel ? `<div class="tt-path">${escapeHTML(it.pathLabel)}</div>` : '';
-        const checkBox = `<input type="checkbox" class="tt-check" ${it.completed?'checked':''} aria-label="完成 ${escapeHTML(it.task.name)}">`;
-        const head = `<div class="tt-head">${groupDot}<span class="tt-name">${escapeHTML(it.task.name)}</span>${checkBox}</div>`;
-        return `<div class="${cls}" data-task="${it.task.id}" draggable="true"${groupStyle}>${head}<div class="tt-meta">${prioBadge}${typeBadge}${statusBadge}<span>截止 ${formatDateSlash(it.task.end)}</span></div>${pathLine}</div>`;
-      }).join('') : '<div class="empty-state" style="padding:24px 10px"><span class="empty-state-mark">·</span><p style="font-size:12px">暂无任务</p></div>';
+      const cards = list.length ? (()=>{
+        let out='', lastKey=null;
+        list.forEach(it=>{
+          const g = groupInfoFor(it, mode);
+          const key = g ? g.key : null;
+          if(g && key!==lastKey){ out+=`<div class="today-group-sep" style="--group-color:${g.color}"></div>`; lastKey=key; }
+          const cls = 'today-task-card'+(it.isOverdue?' overdue':'')+(it.completed?' completed':'')+(g?' grouped':'');
+          const groupStyle = g ? ` style="--group-color:${g.color}"` : '';
+          const groupDot = g ? '<span class="group-dot"></span>' : '';
+          const prioBadge = `<span class="priority-badge" style="background:${PRIORITY_COLOR[it.task.priority]||PRIORITY_COLOR.P1}">${it.task.priority}</span>`;
+          const typeBadge = `<span class="type-badge" style="background:${typeColor(it.task.type)}">${escapeHTML(it.task.type||'设计')}</span>`;
+          const statusBadge = it.completed?'<span class="priority-badge" style="background:var(--success)">完成</span>':(it.isOverdue?'<span class="priority-badge" style="background:var(--p0)">逾期</span>':'<span class="priority-badge" style="background:var(--olive)">今天</span>');
+          const pathLine = it.pathLabel ? `<div class="tt-path">${escapeHTML(it.pathLabel)}</div>` : '';
+          const checkBox = `<input type="checkbox" class="tt-check" ${it.completed?'checked':''} aria-label="完成 ${escapeHTML(it.task.name)}">`;
+          const head = `<div class="tt-head">${groupDot}<span class="tt-name">${escapeHTML(it.task.name)}</span>${checkBox}</div>`;
+          out+=`<div class="${cls}" data-task="${it.task.id}" draggable="true"${groupStyle}>${head}<div class="tt-meta">${prioBadge}${typeBadge}${statusBadge}<span>截止 ${formatDateSlash(it.task.end)}</span></div>${pathLine}</div>`;
+        });
+        return out;
+      })() : '<div class="empty-state" style="padding:24px 10px"><span class="empty-state-mark">·</span><p style="font-size:12px">暂无任务</p></div>';
       const sortBtns = SORT_KEYS.map(s=>`<button type="button" data-sort="${s}" class="${mode===s?'active':''}">${sortLabels[s]}</button>`).join('');
       const trophy = k==='done' ? ' <span class="col-trophy" title="今日战绩">🏆</span>' : '';
       return `<div class="today-col" data-prio="${k}"><div class="today-col-head" data-prio="${k}"><div class="col-head-left"><span class="col-title">${titles[k]}${trophy}</span><span class="col-count">${list.length}</span></div><div class="col-sort" data-prio="${k}">${sortBtns}</div></div><div class="today-col-body">${cards}</div></div>`;
@@ -1661,15 +1682,14 @@ create policy "ppm own row" on ppm_workbench
     let html = `<div class="detail-node">`;
     html += `<div class="form-grid">
       <div class="field"><label>名称</label><input id="dName" maxlength="80" placeholder="例如：厂房结构设计" value="${escapeHTML(isNew?detailDraft.name:(node.name||''))}"></div>
-      <div class="field"><label>类型</label><select id="dType">${typeOptions.map(t=>`<option value="${t}" ${currentType===t?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="field"><label>类型</label><input list="dTypeList" id="dType" value="${escapeHTML(currentType)}" placeholder="选择或输入类型"><datalist id="dTypeList">${[...new Set([...TASK_TYPES,...(data.customTypes||[])])].map(t=>`<option value="${escapeHTML(t)}">`).join('')}</datalist></div>
       <div class="field"><label>优先级</label><select id="dPriority">${['P0','P1'].map(p=>`<option value="${p}" ${((isNew?detailDraft.priority:(node.priority||'P1'))===p)?'selected':''}>${p} ${priorityText(p)}</option>`).join('')}</select></div>
       <div class="field"><label>开始日期</label><input type="date" id="dStart" value="${isNew?detailDraft.start:(node.start||'')}"></div>
       <div class="field"><label>结束日期</label><input type="date" id="dEnd" value="${isNew?detailDraft.end:(node.end||'')}"></div>
     </div>`;
     if(!isNew){
       const checkText = isProject ? '标记项目已完成（自动归档）' : '标记为已完成';
-      html += `<div class="progress-row"><label class="progress-check ${node.completed?'checked':''}" id="progressCheck"><input type="checkbox" id="dCompleted" ${node.completed?'checked':''}><span id="progressCheckText">${checkText}</span></label><div class="detail-progress"><div class="bar"><span style="width:${progress}%"></span></div><span class="val">${progress}%</span></div></div>`;
-      html += `<div style="margin-top:14px;display:flex;gap:10px"><button class="btn danger small" data-del-node>删除当前节点</button></div>`;
+      html += `<div class="progress-row"><button class="btn danger small delete-node-btn" data-del-node>删除当前节点</button><div class="detail-progress"><div class="bar"><span style="width:${progress}%"></span></div><span class="val">${progress}%</span></div><label class="progress-check ${node.completed?'checked':''}" id="progressCheck"><input type="checkbox" id="dCompleted" ${node.completed?'checked':''}><span id="progressCheckText">${checkText}</span></label></div>`;
     } else {
       html += `<div style="margin-top:16px"><button class="btn primary block" id="dCreate">创建项目</button></div>`;
     }
@@ -1682,7 +1702,7 @@ create policy "ppm own row" on ppm_workbench
         <div class="form-grid">
           <div class="add-left">
             <div class="field a-name"><label>子任务名称</label><input id="aName" maxlength="80" placeholder="例如：荷载统计"></div>
-            <div class="field a-type"><label>类型</label><select id="aType">${TASK_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}</select></div>
+            <div class="field a-type"><label>类型</label><input list="aTypeList" id="aType" value="设计" placeholder="选择或输入类型"><datalist id="aTypeList">${[...new Set([...TASK_TYPES,...(data.customTypes||[])])].map(t=>`<option value="${escapeHTML(t)}">`).join('')}</datalist></div>
             <div class="field a-priority"><label>优先级</label><select id="aPriority">${['P0','P1'].map(p=>`<option value="${p}">${p} ${priorityText(p)}</option>`).join('')}</select></div>
             <div class="field a-start"><label>开始日期</label><input type="date" id="aStart" value="${todayISO}"></div>
             <div class="field a-end"><label>结束日期</label><input type="date" id="aEnd" value="${todayISO}"></div>
@@ -1702,7 +1722,7 @@ create policy "ppm own row" on ppm_workbench
             <div class="child-body">
               <div class="child-top">
                 <span class="priority-badge" style="background:${PRIORITY_COLOR[c.priority]}">${c.priority}</span>
-                <span class="type-badge" style="background:${TASK_TYPE_COLOR[c.type]||'#64748b'}">${escapeHTML(c.type||'设计')}</span>
+                <span class="type-badge" style="background:${typeColor(c.type)}">${escapeHTML(c.type||'设计')}</span>
                 <span class="child-name">${escapeHTML(c.name)}</span>
               </div>
               <div class="child-bottom">
@@ -1729,7 +1749,10 @@ create policy "ppm own row" on ppm_workbench
         else { const n=currentNode(); if(n) n.name = nameInput.value; saveData(); updateBreadcrumbName(nameInput.value); }
       });
     }
-    const type = $('dType'); if(type) type.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.type=type.value; else { const n=currentNode(); if(n){n.type=type.value; saveData(); renderRows(); renderNav();} } });
+    const type = $('dType'); if(type) type.addEventListener('change', ()=>{
+      const val = String(type.value||'').trim() || '设计';
+      if(detailNewProject) detailDraft.type=val; else { const n=currentNode(); if(n){n.type=val; registerCustomType(val); saveData(); renderRows(); renderNav();} }
+    });
     const prio = $('dPriority'); if(prio) prio.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.priority=prio.value; else { const n=currentNode(); if(n){n.priority=prio.value; saveData(); renderRows(); renderNav();} } });
     const start = $('dStart'); if(start) start.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.start=start.value; else { const n=currentNode(); if(n){n.start=start.value; saveData(); renderRows();} } });
     const end = $('dEnd'); if(end) end.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.end=end.value; else { const n=currentNode(); if(n){n.end=end.value; saveData(); renderRows();} } });
@@ -1764,13 +1787,14 @@ create policy "ppm own row" on ppm_workbench
     const addCancel = els.detailBody.querySelector('[data-add-cancel]'); if(addCancel) addCancel.addEventListener('click', ()=>{ $('addArea').hidden=true; });
     const addConfirm = els.detailBody.querySelector('[data-add-confirm]'); if(addConfirm) addConfirm.addEventListener('click', ()=>{
       const name=$('aName').value.trim(); if(!name){ showToast('请输入子任务名称'); return; }
-      const type=$('aType').value; const prio=$('aPriority').value; const s=$('aStart').value; const e=$('aEnd').value;
+      const type=String($('aType').value||'').trim() || '设计'; const prio=$('aPriority').value; const s=$('aStart').value; const e=$('aEnd').value;
+      registerCustomType(type);
       const parent = currentNode(); if(!parent) return;
       parent.tasks = parent.tasks||[];
-      parent.tasks.push({ id:uid(), name, priority:prio, type:type||'设计', start:s, end:e, completed:false, expanded:true, tasks:[] });
+      parent.tasks.push({ id:uid(), name, priority:prio, type, start:s, end:e, completed:false, expanded:true, tasks:[] });
       saveData(); render();
       // 收起并清空表单，重新渲染（子任务变为可点击按钮）
-      $('addArea').hidden=true; $('aName').value='';
+      $('addArea').hidden=true; $('aName').value=''; $('aType').value='设计';
       renderDetail(); showToast('子任务已添加');
     });
     // 子任务卡片直接勾选完成（级联）
