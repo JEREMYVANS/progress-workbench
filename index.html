@@ -130,10 +130,9 @@
 
   /* ── Today task card (Apple list-row style) ── */
   .today-task-card{position:relative;padding:10px 12px 10px 14px;border:0.5px solid var(--line);border-radius:12px;background:var(--panel);font-size:12.5px;line-height:1.4;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s,transform .15s;box-shadow:var(--shadow-sm);overflow:hidden}
-  .today-task-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--type-color,var(--group-color,var(--bar-color,var(--blue))));opacity:1}
+  .today-task-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--group-color,var(--bar-color,var(--blue)));opacity:1}
   .today-task-card:hover{background:#fff;border-color:var(--line-strong);box-shadow:var(--shadow-hover);transform:translateY(-1px)}
   html[data-theme="dark"] .today-task-card:hover{background:rgba(58,58,60,.85)}
-  .today-task-card.overdue::before{background:var(--p0)!important}
   .today-task-card.completed{opacity:.7}
   .today-task-card .tt-head{display:flex;align-items:center;gap:6px;margin-bottom:3px}
   .today-task-card .tt-name{flex:1;min-width:0;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
@@ -311,7 +310,7 @@
   .overdue-roll:hover{background:rgba(60,60,67,.10);border-color:var(--line-strong)}
   .overdue-roll.has-overdue{background:rgba(255,59,48,.10);color:var(--p0);border-color:rgba(255,59,48,.30);box-shadow:0 0 0 3px rgba(255,59,48,.08)}
   .overdue-roll.has-overdue:hover{background:rgba(255,59,48,.16);border-color:rgba(255,59,48,.36)}
-  .today-task-card.grouped .group-dot{width:9px;height:9px;border-radius:50%;background:var(--type-color,var(--group-color));display:inline-block;flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--type-color,var(--group-color)) 24%,transparent)}
+  .today-task-card.grouped .group-dot{width:9px;height:9px;border-radius:50%;background:var(--group-color);display:inline-block;flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--group-color) 24%,transparent)}
   .task-list{padding:14px 16px 18px;display:grid;gap:10px}
   .task-item{position:relative;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:12px 12px 12px 14px;border:0.5px solid var(--line);border-radius:14px;background:var(--panel);transition:background .15s,border-color .15s,box-shadow .15s;cursor:pointer;box-shadow:var(--shadow-sm);overflow:hidden}
   .task-item::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--bar-color,var(--blue));opacity:.95}
@@ -1407,8 +1406,7 @@ create policy "ppm own row" on ppm_workbench
           const key = g ? g.key : null;
           if(g && key!==lastKey){ out+=`<div class="today-group-sep" style="--group-color:${g.color}"></div>`; lastKey=key; }
           const cls = 'today-task-card'+(it.isOverdue?' overdue':'')+(it.completed?' completed':'')+(g?' grouped':'');
-          const typeColorVal = typeColor(it.task.type);
-          const groupStyle = g ? ` style="--type-color:${typeColorVal};--group-color:${g.color}"` : ` style="--type-color:${typeColorVal}"`;
+          const groupStyle = g ? ` style="--group-color:${g.color}"` : '';
           const groupDot = g ? '<span class="group-dot"></span>' : '';
           const prioBadge = `<span class="priority-badge" style="background:${PRIORITY_COLOR[it.task.priority]||PRIORITY_COLOR.P1}">${it.task.priority}</span>`;
           const typeBadge = `<span class="type-badge" style="background:${typeColor(it.task.type)}">${escapeHTML(it.task.type||'设计')}</span>`;
