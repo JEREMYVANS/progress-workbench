@@ -728,7 +728,12 @@ create policy "ppm own row" on ppm_workbench
   const APP_SOURCE_SCRIPT = (document.currentScript && document.currentScript.textContent) || '';
   'use strict';
   const LS_KEY = 'wb_structengineer_data_v2';
-  const COLORS = ['#d62728','#ff7f0e','#2ca02c','#1f77b4','#9467bd','#8c564b','#17becf','#e377c2','#000075','#8e44ad','#16a085','#c0392b','#b8860b','#0e9aa0'];
+  const COLORS = [
+    'hsl(0 85% 58%)','hsl(28 95% 55%)','hsl(48 92% 52%)','hsl(78 85% 48%)',
+    'hsl(142 76% 45%)','hsl(170 80% 42%)','hsl(195 90% 50%)','hsl(217 90% 58%)',
+    'hsl(240 85% 65%)','hsl(262 88% 66%)','hsl(280 75% 55%)','hsl(310 80% 58%)',
+    'hsl(340 80% 58%)','hsl(20 70% 48%)','hsl(90 65% 45%)','hsl(180 85% 38%)'
+  ];
   const PRIORITY_COLOR = { 'P0':'var(--p0)', 'P1':'var(--p1)' };
   const $ = id => document.getElementById(id);
   const todayDate = stripTime(new Date());
@@ -1074,20 +1079,42 @@ create policy "ppm own row" on ppm_workbench
     return [Math.round(f(p,q,h+1/3)*255), Math.round(f(p,q,h)*255), Math.round(f(p,q,h-1/3)*255)];
   }
   function colorDist(a,b){ const A=toRgb(a), B=toRgb(b); return Math.hypot(A[0]-B[0], A[1]-B[1], A[2]-B[2]); }
-  // 从调色板里挑与已用颜色差异最大（最易区分）的一个；用尽后再按色相旋转生成新色，保证不重复
+  function hueOf(c){
+    if(typeof c==='string' && c.indexOf('hsl')===0){
+      const m = c.match(/hsl\(([\d.]+)/);
+      if(m) return +m[1];
+    }
+    const [r,g,b]=toRgb(c);
+    const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+    if(d===0) return 0;
+    let h;
+    if(max===r) h=((g-b)/d+(g<b?6:0))/6;
+    else if(max===g) h=((b-r)/d+2)/6;
+    else h=((r-g)/d+4)/6;
+    return h*360;
+  }
+  function hueDiff(a,b){ let d=Math.abs(hueOf(a)-hueOf(b)); return Math.min(d,360-d); }
+  // 从调色板里挑与已用颜色差异最大（最易区分）的一个：优先保证色相环间隔，其次看 RGB 距离；用尽后按黄金角生成新色，保证不重复
   function pickDistinctProjectColor(used){
     const usedList = [...used];
     if(usedList.length===0) return COLORS[0];
-    let best=null, bestScore=-1;
+    let best=null, bestScore=-Infinity;
     for(const c of COLORS){
       if(used.has(c)) continue;
-      let minD = Infinity;
-      for(const u of usedList) minD = Math.min(minD, colorDist(c,u));
-      if(minD > bestScore){ bestScore = minD; best = c; }
+      let minHue = Infinity, avgDist = 0;
+      for(const u of usedList){
+        const hd = hueDiff(c,u);
+        if(hd < minHue) minHue = hd;
+        avgDist += colorDist(c,u);
+      }
+      avgDist /= usedList.length;
+      // 色相间隔权重远高于 RGB 距离，确保人眼能一眼区分
+      const score = minHue * 12 + avgDist;
+      if(score > bestScore){ bestScore = score; best = c; }
     }
     if(best) return best;
-    const hue = (usedList.length*53)%360;
-    return `hsl(${hue} 72% 50%)`;
+    const hue = Math.round((usedList.length*137.5)%360);
+    return `hsl(${hue} 78% 54%)`;
   }
   function unusedProjectColor(){ return pickDistinctProjectColor(new Set(data.projects.map(p=>p.color))); }
   // 启动时把每个项目的颜色重排成「彼此差异最大化」的分配，确保任意两个项目颜色不同且明显区分
