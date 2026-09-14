@@ -1002,8 +1002,11 @@ create policy "ppm own row" on ppm_workbench
         data = remote; normalizeTypes(data.projects, true); lastSavedAt = data._savedAt || Date.now();
         if(!data.todaySort && _prevSort) data.todaySort = _prevSort;
         if(!data.todayManual && _prevManual) data.todayManual = _prevManual;
+        ensureProjectColors(); // 云端拉回旧颜色后，强制按当前项目顺序重新分配黄金角色相
         try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){}
         render(); updateSyncBtn();
+        // 颜色已重置，异步把新颜色推回云端，避免再次打开时被旧颜色覆盖
+        setTimeout(()=>{ if(sbAuthed() && !pushRemote.running) pushRemote(); }, 0);
         const tag = (contentDiff && !timeNewer) ? '（按内容差异同步）' : '';
         syncLog.lastPull = new Date().toLocaleString('zh-CN',{hour12:false}) + tag;
         syncLog.lastError = '';
