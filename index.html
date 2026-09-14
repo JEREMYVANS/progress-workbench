@@ -728,9 +728,52 @@ create policy "ppm own row" on ppm_workbench
   const APP_SOURCE_SCRIPT = (document.currentScript && document.currentScript.textContent) || '';
   'use strict';
   const LS_KEY = 'wb_structengineer_data_v2';
-  const GOLDEN_ANGLE = 137.50776405003785;
-  function projectColor(i){ return `hsl(${Math.round((i*GOLDEN_ANGLE)%360)} 78% 54%)`; }
-  const COLORS = Array.from({length:24},(_,i)=>projectColor(i));
+  // 项目颜色：前 7 个用精选的明显不同颜色，超过 7 个用 OKLab 感知距离贪心补色，避免人眼看来相近
+  const CURATED_COLORS = [
+    'hsl(0 78% 54%)',    // 红
+    'hsl(215 80% 55%)',  // 蓝
+    'hsl(145 75% 50%)',  // 绿
+    'hsl(30 95% 55%)',   // 橙
+    'hsl(275 75% 60%)',  // 紫
+    'hsl(185 85% 45%)',  // 青
+    'hsl(340 85% 60%)'   // 粉
+  ];
+  function parseHslStr(s){ const m=s.match(/hsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*\)/); return m?[+m[1]/360,+m[2]/100,+m[3]/100]:[0,0,0]; }
+  function srgbLinear(v){ v/=255; return v<=0.04045?v/12.92:Math.pow((v+0.055)/1.055,2.4); }
+  function rgbToOklab([r,g,b]){
+    const lr=srgbLinear(r), lg=srgbLinear(g), lb=srgbLinear(b);
+    const l=0.8189330101*lr+0.3618667424*lg-0.1288597137*lb;
+    const m=0.0329845436*lr+0.9293118715*lg+0.0361456387*lb;
+    const s=0.0482003018*lr+0.2643662691*lg+0.6338517070*lb;
+    const l_=Math.cbrt(l), m_=Math.cbrt(m), s_=Math.cbrt(s);
+    return [0.2104542553*l_+0.7936177850*m_-0.0040720468*s_,
+            1.9779984951*l_-2.4285922050*m_+0.4505937099*s_,
+            0.0259040371*l_+0.7827717662*m_-0.8086757660*s_];
+  }
+  function oklabDist(a,b){ return Math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2); }
+  function candidatePool(){ const pool=[]; for(let h=0;h<360;h+=6){ pool.push(`hsl(${h} 82% 52%)`, `hsl(${h} 75% 58%)`, `hsl(${h} 88% 48%)`); } return pool; }
+  function generateDistinctPalette(n){
+    if(n<=0) return [];
+    if(n<=CURATED_COLORS.length) return CURATED_COLORS.slice(0,n);
+    const picked=CURATED_COLORS.map(css=>({css, lab:rgbToOklab(hslToRgb(...parseHslStr(css)))}));
+    let candidates=candidatePool().map(css=>({css, lab:rgbToOklab(hslToRgb(...parseHslStr(css)))}))
+      .filter(c=>!picked.some(p=>oklabDist(c.lab,p.lab)<0.18));
+    while(picked.length<n && candidates.length){
+      let bestIdx=-1, bestDist=-1;
+      for(let i=0;i<candidates.length;i++){
+        let minD=Infinity;
+        for(const p of picked) minD=Math.min(minD, oklabDist(candidates[i].lab,p.lab));
+        if(minD>bestDist){ bestDist=minD; bestIdx=i; }
+      }
+      if(bestIdx===-1) break;
+      picked.push(candidates.splice(bestIdx,1)[0]);
+      candidates=candidates.filter(c=>oklabDist(c.lab,picked[picked.length-1].lab)>=0.18);
+    }
+    while(picked.length<n){ const i=picked.length; picked.push({css:`hsl(${Math.round((i*137.5)%360)} 78% 54%)`}); }
+    return picked.map(p=>p.css);
+  }
+  const COLORS = generateDistinctPalette(24);
+  function projectColor(i){ return COLORS[i % COLORS.length]; }
   const PRIORITY_COLOR = { 'P0':'var(--p0)', 'P1':'var(--p1)' };
   const $ = id => document.getElementById(id);
   const todayDate = stripTime(new Date());
@@ -1116,10 +1159,11 @@ create policy "ppm own row" on ppm_workbench
     const hue = Math.round((usedList.length*137.5)%360);
     return `hsl(${hue} 78% 54%)`;
   }
-  function unusedProjectColor(){ return projectColor(data.projects.length); }
-  // 启动时按项目顺序强制分配黄金角色相，相邻项目固定相差 ~137.5°，确保一眼区分
+  function unusedProjectColor(){ const palette=generateDistinctPalette((data.projects||[]).length+1); return palette[palette.length-1]; }
+  // 启动时按当前项目集合生成感知上最易区分的调色板，再按顺序分配，杜绝两个项目同色或过于接近
   function ensureProjectColors(){
-    (data.projects||[]).forEach((p,i)=>{ p.color = projectColor(i); });
+    const palette=generateDistinctPalette((data.projects||[]).length);
+    (data.projects||[]).forEach((p,i)=>{ p.color = palette[i] || COLORS[i % COLORS.length]; });
   }
   function getAllDeep(tasks){ let arr=[]; (tasks||[]).forEach(t=>{ arr.push(t); arr=arr.concat(getAllDeep(t.tasks)); }); return arr; }
   function getNode(id, list=data.projects){
