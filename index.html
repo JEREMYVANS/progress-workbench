@@ -728,15 +728,15 @@ create policy "ppm own row" on ppm_workbench
   const APP_SOURCE_SCRIPT = (document.currentScript && document.currentScript.textContent) || '';
   'use strict';
   const LS_KEY = 'wb_structengineer_data_v2';
-  // 项目颜色：前 7 个用精选的明显不同颜色，超过 7 个用 OKLab 感知距离贪心补色，避免人眼看来相近
+  // 项目颜色：前 7 个用精选的明显不同颜色（不用红色，红色保留给 P0/逾期告警），超过 7 个用 OKLab 感知距离贪心补色
   const CURATED_COLORS = [
-    'hsl(0 78% 54%)',    // 红
     'hsl(215 80% 55%)',  // 蓝
     'hsl(145 75% 50%)',  // 绿
     'hsl(30 95% 55%)',   // 橙
     'hsl(275 75% 60%)',  // 紫
     'hsl(185 85% 45%)',  // 青
-    'hsl(340 85% 60%)'   // 粉
+    'hsl(52 95% 50%)',   // 黄
+    'hsl(328 80% 58%)'   // 粉
   ];
   function parseHslStr(s){ const m=s.match(/hsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*\)/); return m?[+m[1]/360,+m[2]/100,+m[3]/100]:[0,0,0]; }
   function srgbLinear(v){ v/=255; return v<=0.04045?v/12.92:Math.pow((v+0.055)/1.055,2.4); }
@@ -751,7 +751,7 @@ create policy "ppm own row" on ppm_workbench
             0.0259040371*l_+0.7827717662*m_-0.8086757660*s_];
   }
   function oklabDist(a,b){ return Math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2); }
-  function candidatePool(){ const pool=[]; for(let h=0;h<360;h+=6){ pool.push(`hsl(${h} 82% 52%)`, `hsl(${h} 75% 58%)`, `hsl(${h} 88% 48%)`); } return pool; }
+  function candidatePool(){ const pool=[]; for(let h=24;h<336;h+=6){ pool.push(`hsl(${h} 82% 52%)`, `hsl(${h} 75% 58%)`, `hsl(${h} 88% 48%)`); } return pool; } // 色相 24~330，避开红色区间
   function generateDistinctPalette(n){
     if(n<=0) return [];
     if(n<=CURATED_COLORS.length) return CURATED_COLORS.slice(0,n);
@@ -942,6 +942,7 @@ create policy "ppm own row" on ppm_workbench
   async function sbUpsertRow(payload){
     await sbRequest('/rest/v1/ppm_workbench', 'POST', { user_id: syncCfg.userId, data: payload }, { prefer:'resolution=merge-duplicates' });
   }
+  let lastPushDoneTs = 0; // 最近一次成功推送云端的时间，用于拉取时判断是否有刚完成的本地推送（防止旧读覆盖新写）
   async function pushRemote(){
     if(!sbAuthed()) return;
     if(data._demo) return; // 示例数据不上传云端，避免污染同步文件
@@ -971,6 +972,7 @@ create policy "ppm own row" on ppm_workbench
           if(!hasOverlap){
             const hist = [...(Array.isArray(remote._history)?remote._history:[]), { ts: Date.now(), projects: data.projects }].sort((a,b)=>b.ts-a.ts).slice(0,10);
             await sbUpsertRow({ projects: remoteProjects, _savedAt: Date.now(), _history: hist });
+            lastPushDoneTs = Date.now();
             syncLog.lastError = '检测到本地数据与云端完全不同（可能来自其它入口/设备），已保留云端 '+remoteProjects.length+' 个项目；本地这份已存入云端历史快照，可在「数据急救」中找回。';
             renderSyncInfo();
             await pullRemote(true, true);
@@ -998,6 +1000,7 @@ create policy "ppm own row" on ppm_workbench
         const payload = { projects: data.projects, _savedAt: Date.now(), todaySort: data.todaySort, todayManual: data.todayManual };
         if(trimmed.length) payload._history = trimmed;
         await sbUpsertRow(payload);
+        lastPushDoneTs = Date.now();
         data._savedAt = payload._savedAt; lastSavedAt = payload._savedAt;
         syncLog.lastPush = new Date().toLocaleString('zh-CN',{hour12:false});
         syncLog.lastError = '';
@@ -1011,6 +1014,7 @@ create policy "ppm own row" on ppm_workbench
     if(!sbAuthed()) return;
     if(pullRemote.running) return;   // 防止轮询/事件并发拉取叠加
     pullRemote.running = true;
+    const readTs = Date.now(); // 记录发起读取的时刻：若读取发出后本地才完成推送，本次读到的可能是旧云端数据
     try{
       const remote = await sbReadRow();
       // 云端若是示例数据（_demo），绝不拿它覆盖本地真实数据；
@@ -1037,7 +1041,10 @@ create policy "ppm own row" on ppm_workbench
       const contentDiff = !!remote && JSON.stringify(remote.projects) !== JSON.stringify(data.projects);
       // 保护：本地正在推送且云端不更新时暂不覆盖，避免清掉正在上传的本地修改
       const skipByLocalPush = pushRemote.running && !timeNewer;
-      if(remote && (force || timeNewer || contentDiff) && !skipByLocalPush){
+      // 保护：读取发出后本地才完成推送（读到的可能是推送前的旧快照），或推送刚结束 5 秒内，
+      // 此时仅凭"内容不同"不允许覆盖本地，防止竞态把用户新加的子任务/完成状态冲掉
+      const recentLocalPush = lastPushDoneTs >= readTs || (Date.now() - lastPushDoneTs) < 5000;
+      if(remote && (force || timeNewer || (contentDiff && !recentLocalPush)) && !skipByLocalPush){
         // 覆盖本地前，先把当前本地数据备份到独立存储键（误覆盖后可在「数据急救」一键找回）
         try{ if(data.projects.length) localStorage.setItem(LS_KEY+'_bak', JSON.stringify({ ts: Date.now(), projects: data.projects })); }catch(e){}
         // 拉取覆盖前先保留本地视图态（排序/自定义顺序），云端副本若未存这些字段则不覆盖，避免排序被打回默认「类型」
