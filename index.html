@@ -404,6 +404,18 @@
   .field input[type="date"]{max-width:100%;min-width:0!important;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis}
   @media(max-width:760px){.detail-node{padding:12px}.field input[type="date"]{padding-left:6px;padding-right:6px;font-size:14px;-webkit-text-size-adjust:100%}}
   .field input:focus,.field select:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
+  /* 类型组合框：可下拉 + 可输入新类型（替代 Safari 不显示箭头的 datalist） */
+  .type-combo{position:relative}
+  .type-combo .combo-input{padding-right:34px}
+  .type-combo .combo-toggle{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;display:grid;place-items:center;border-radius:7px}
+  .type-combo .combo-toggle:hover{background:var(--panel2);color:var(--text)}
+  .type-combo .combo-list{position:absolute;z-index:60;top:calc(100% + 5px);left:0;right:0;max-height:230px;overflow:auto;background:var(--panel);border:0.5px solid var(--line-strong);border-radius:11px;box-shadow:0 10px 30px rgba(0,0,0,.22);padding:5px}
+  .type-combo .combo-list[hidden]{display:none}
+  .type-combo .combo-item{padding:9px 10px;border-radius:8px;font-size:14px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:9px}
+  .type-combo .combo-item:hover,.type-combo .combo-item.active{background:var(--panel2)}
+  .type-combo .combo-item .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .type-combo .combo-item.added::after{content:"＋ 新建";margin-left:auto;font-size:11px;color:var(--olive)}
+  .type-combo .combo-item.empty{color:var(--muted);cursor:default}
   .detail-progress{display:flex;align-items:center;gap:10px;margin-top:14px}
   .detail-progress .bar{flex:1;height:8px;border-radius:99px;background:rgba(60,60,67,.10);overflow:hidden}
   html[data-theme="dark"] .detail-progress .bar{background:rgba(255,255,255,.10)}
@@ -1802,7 +1814,7 @@ create policy "ppm own row" on ppm_workbench
     let html = `<div class="detail-node">`;
     html += `<div class="form-grid">
       <div class="field"><label>名称</label><input id="dName" maxlength="80" placeholder="例如：厂房结构设计" value="${escapeHTML(isNew?detailDraft.name:(node.name||''))}"></div>
-      <div class="field"><label>类型</label><input list="dTypeList" id="dType" value="${escapeHTML(currentType)}" placeholder="选择或输入类型"><datalist id="dTypeList">${[...new Set([...TASK_TYPES,...(data.customTypes||[])])].map(t=>`<option value="${escapeHTML(t)}">`).join('')}</datalist></div>
+      <div class="field"><label>类型</label><div class="type-combo" data-combo="dType"><input id="dType" class="combo-input" autocomplete="off" value="${escapeHTML(currentType)}" placeholder="选择或输入类型"><button type="button" class="combo-toggle" tabindex="-1" aria-label="展开类型">▾</button><div class="combo-list" hidden></div></div></div>
       <div class="field"><label>优先级</label><select id="dPriority">${['P0','P1'].map(p=>`<option value="${p}" ${((isNew?detailDraft.priority:(node.priority||'P1'))===p)?'selected':''}>${p} ${priorityText(p)}</option>`).join('')}</select></div>
       <div class="field"><label>开始日期</label><input type="date" id="dStart" value="${isNew?detailDraft.start:(node.start||'')}"></div>
       <div class="field"><label>结束日期</label><input type="date" id="dEnd" value="${isNew?detailDraft.end:(node.end||'')}"></div>
@@ -1822,7 +1834,7 @@ create policy "ppm own row" on ppm_workbench
         <div class="form-grid">
           <div class="add-left">
             <div class="field a-name"><label>子任务名称</label><input id="aName" maxlength="80" placeholder="例如：荷载统计"></div>
-            <div class="field a-type"><label>类型</label><input list="aTypeList" id="aType" value="设计" placeholder="选择或输入类型"><datalist id="aTypeList">${[...new Set([...TASK_TYPES,...(data.customTypes||[])])].map(t=>`<option value="${escapeHTML(t)}">`).join('')}</datalist></div>
+            <div class="field a-type"><label>类型</label><div class="type-combo" data-combo="aType"><input id="aType" class="combo-input" autocomplete="off" value="设计" placeholder="选择或输入类型"><button type="button" class="combo-toggle" tabindex="-1" aria-label="展开类型">▾</button><div class="combo-list" hidden></div></div></div>
             <div class="field a-priority"><label>优先级</label><select id="aPriority">${['P0','P1'].map(p=>`<option value="${p}">${p} ${priorityText(p)}</option>`).join('')}</select></div>
             <div class="field a-start"><label>开始日期</label><input type="date" id="aStart" value="${todayISO}"></div>
             <div class="field a-end"><label>结束日期</label><input type="date" id="aEnd" value="${todayISO}"></div>
@@ -1861,6 +1873,39 @@ create policy "ppm own row" on ppm_workbench
     bindDetail();
   }
 
+  // 类型组合框：把"下拉选择"与"自由输入新类型"统一到一个输入框（Safari 下 datalist 不显示箭头，故自实现）
+  function setupTypeCombo(inputId){
+    const input = $(inputId); if(!input) return;
+    const wrap = input.closest('.type-combo'); if(!wrap) return;
+    const toggle = wrap.querySelector('.combo-toggle');
+    const list = wrap.querySelector('.combo-list');
+    const options = ()=> [...new Set([...TASK_TYPES, ...(data.customTypes||[])])];
+    const open = ()=>{
+      const q = (input.value||'').trim().toLowerCase();
+      const all = options();
+      const matched = all.filter(t=> !q || t.toLowerCase().includes(q));
+      const exact = all.some(t=> t.toLowerCase() === q);
+      let html = matched.map(t=>`<div class="combo-item" data-val="${escapeHTML(t)}"><span class="dot" style="background:${typeColor(t)}"></span>${escapeHTML(t)}</div>`).join('');
+      if(q && !exact) html += `<div class="combo-item added" data-val="${escapeHTML(input.value.trim())}"><span class="dot" style="background:${typeColor(input.value.trim())}"></span>${escapeHTML(input.value.trim())}</div>`;
+      if(!html) html = '<div class="combo-item empty">无匹配，回车即可新建</div>';
+      list.innerHTML = html; list.hidden = false; wrap.classList.add('open');
+      list.querySelectorAll('.combo-item[data-val]').forEach(it=>{
+        it.addEventListener('mousedown', e=>e.preventDefault()); // 防止 blur 抢先关闭
+        it.addEventListener('click', ()=>{
+          input.value = it.dataset.val; list.hidden = true; wrap.classList.remove('open');
+          input.focus(); input.dispatchEvent(new Event('change'));
+        });
+      });
+    };
+    const close = ()=>{ list.hidden = true; wrap.classList.remove('open'); };
+    input.addEventListener('focus', open);
+    input.addEventListener('click', ()=>{ if(list.hidden) open(); });
+    input.addEventListener('input', ()=>{ if(list.hidden) open(); else open(); });
+    input.addEventListener('keydown', e=>{ if(e.key==='Escape') close(); });
+    input.addEventListener('blur', ()=> setTimeout(close, 150));
+    toggle.addEventListener('click', e=>{ e.preventDefault(); if(list.hidden) open(); else close(); input.focus(); });
+  }
+
   function bindDetail(){
     // 节点字段实时保存
     const nameInput = $('dName'); if(nameInput){
@@ -1873,6 +1918,8 @@ create policy "ppm own row" on ppm_workbench
       const val = String(type.value||'').trim() || '设计';
       if(detailNewProject) detailDraft.type=val; else { const n=currentNode(); if(n){n.type=val; registerCustomType(val); saveData(); renderRows(); renderNav();} }
     });
+    setupTypeCombo('dType'); // 类型组合框：下拉 + 可输入新类型
+    setupTypeCombo('aType'); // 添加子任务区域同理
     const prio = $('dPriority'); if(prio) prio.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.priority=prio.value; else { const n=currentNode(); if(n){n.priority=prio.value; saveData(); renderRows(); renderNav();} } });
     const start = $('dStart'); if(start) start.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.start=start.value; else { const n=currentNode(); if(n){n.start=start.value; saveData(); renderRows();} } });
     const end = $('dEnd'); if(end) end.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.end=end.value; else { const n=currentNode(); if(n){n.end=end.value; saveData(); renderRows();} } });
