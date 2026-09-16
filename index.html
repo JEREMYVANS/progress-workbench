@@ -1036,15 +1036,18 @@ create policy "ppm own row" on ppm_workbench
         lastSyncTs = Date.now(); updateSyncTime(); renderSyncInfo();
         return;
       }
-      // 覆盖判定：force / 云端时间戳更新 / 内容不同（后者消除两端设备时钟不一致导致的漏更）
+      // 覆盖判定：force / 云端时间戳确实更新 / 内容不同且云端确实比本地新
       const timeNewer = !!(remote && remote._savedAt && remote._savedAt > (lastSavedAt||0));
       const contentDiff = !!remote && JSON.stringify(remote.projects) !== JSON.stringify(data.projects);
+      // 本地数据的保存时间（data._savedAt 已持久化到本地）：若本地至少和云端一样新，说明云端这份不是更新版，绝不覆盖；
+      // 这能跨刷新生效——即使上次推送没成功落库，刷新后本地 _savedAt 仍比云端新，就不会被旧云覆盖掉改动。
+      const localNewerOrEqual = (data._savedAt||0) >= (remote._savedAt||0);
       // 保护：本地正在推送且云端不更新时暂不覆盖，避免清掉正在上传的本地修改
       const skipByLocalPush = pushRemote.running && !timeNewer;
       // 保护：读取发出后本地才完成推送（读到的可能是推送前的旧快照），或推送刚结束 5 秒内，
-      // 此时仅凭"内容不同"不允许覆盖本地，防止竞态把用户新加的子任务/完成状态冲掉
+      // 此时仅凭"内容不同"不允许覆盖本地，防止竞态把用户新加的子任务/完成状态/自定义类型冲掉
       const recentLocalPush = lastPushDoneTs >= readTs || (Date.now() - lastPushDoneTs) < 5000;
-      if(remote && (force || timeNewer || (contentDiff && !recentLocalPush)) && !skipByLocalPush){
+      if(remote && (force || timeNewer || (contentDiff && !localNewerOrEqual && !recentLocalPush)) && !skipByLocalPush){
         // 覆盖本地前，先把当前本地数据备份到独立存储键（误覆盖后可在「数据急救」一键找回）
         try{ if(data.projects.length) localStorage.setItem(LS_KEY+'_bak', JSON.stringify({ ts: Date.now(), projects: data.projects })); }catch(e){}
         // 拉取覆盖前先保留本地视图态（排序/自定义顺序），云端副本若未存这些字段则不覆盖，避免排序被打回默认「类型」
@@ -1062,6 +1065,10 @@ create policy "ppm own row" on ppm_workbench
         syncLog.lastError = '';
       } else {
         syncLog.lastPull = new Date().toLocaleString('zh-CN',{hour12:false}) + '（已是最新）';
+        // 本地比云端新（如某次推送未成功落库）：把本地修复推回云端，避免下次拉取又把本地旧版本拉回来
+        if(sbAuthed() && remote && (data._savedAt||0) > (remote._savedAt||0) + 2000 && !pushRemote.running){
+          setTimeout(()=>{ if(sbAuthed() && !pushRemote.running) pushRemote(); }, 800);
+        }
       }
       syncLog.remoteSavedAt = remote ? (remote._savedAt||0) : 0;  // 用于诊断：对比本地/云端保存时间
       lastSyncTs = Date.now();
@@ -2093,8 +2100,9 @@ create policy "ppm own row" on ppm_workbench
   }
   function updateSyncBtn(){
     const b = $('syncBtn'); if(!b) return;
-    if(syncCfg.enabled){ b.textContent='已同步'; b.classList.add('synced'); }
-    else { b.textContent='已同步'; b.classList.remove('synced'); }
+    const authed = sbAuthed();
+    b.textContent = authed ? '已登录' : (syncCfg.enabled ? '登录已过期' : '未启用');
+    b.classList.toggle('synced', authed);
     updateSyncTime();
   }
   function setSyncStatus(msg, type){ const el=$('syncStatus'); el.textContent=msg||''; el.className='sync-status'+(type?(' '+type):''); }
