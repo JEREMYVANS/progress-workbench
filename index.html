@@ -557,6 +557,13 @@
   .overview-side{background:var(--panel);border:0.5px solid var(--line);border-radius:16px;padding:10px;position:sticky;top:78px;max-height:calc(100vh - 100px);overflow:auto;box-shadow:0 1px 3px rgba(0,0,0,.04)}
   .ov-group-head{font-size:12px;font-weight:700;color:var(--muted);padding:10px 8px 6px;display:flex;align-items:center;gap:6px;letter-spacing:.02em}
   .ov-group-head .count{background:var(--panel2);border-radius:8px;padding:1px 7px;font-size:11px;font-weight:600}
+  .ov-done-group{margin-top:14px;padding-top:6px;border-top:1px solid var(--hairline,rgba(0,0,0,.08))}
+  .ov-done-head{display:flex;align-items:center;gap:6px;border:none;background:transparent;color:var(--muted);font-size:12px;font-weight:700;padding:8px;cursor:pointer;border-radius:8px;letter-spacing:.02em;width:100%}
+  .ov-done-head:hover{background:var(--panel2);color:var(--text)}
+  .ov-done-head svg{transition:transform .15s}
+  .ov-done-head.open svg{transform:rotate(90deg)}
+  .ov-done-head .count{background:var(--panel2);border-radius:8px;padding:1px 7px;font-size:11px;font-weight:600}
+  .ov-done-group .ov-task{opacity:.65}
   .ov-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:10px;cursor:pointer;font-size:13.5px;color:var(--text);position:relative;user-select:none;-webkit-user-select:none}
   .ov-item:hover{background:var(--panel2)}
   .ov-item.selected{background:var(--panel2);font-weight:600}
@@ -2242,6 +2249,11 @@ create policy "ppm own row" on ppm_workbench
     side += arc.length ? arc.map(p=>item(p,true)).join('') : '<div class="ov-empty">暂无已归档项目</div>';
     els.overviewSide.innerHTML = side;
     bindOverviewSideDrag();
+    els.overviewSide.querySelectorAll('.ov-item').forEach(it=>it.addEventListener('click', ()=>{
+      if(!it.dataset.ov) return;
+      data.overviewSelected = it.dataset.ov;
+      renderOverview();
+    }));
     els.overviewMain.innerHTML = sel ? ovProjectHTML(sel) : '<div class="empty-state"><span class="empty-state-mark">＋</span><strong>还没有项目</strong><p>点击「新建项目」开始排期。</p></div>';
     if(sel) bindOverviewMain();
   }
@@ -2249,11 +2261,17 @@ create policy "ppm own row" on ppm_workbench
     const pct = Math.round(calcProgress(p)*100);
     const color = p.color || '#8e8e93';
     const tasks = p.tasks||[];
+    const openTasks = tasks.filter(t=>!t.completed);
+    const doneTasks = tasks.filter(t=>t.completed);
+    const doneOpen = data.overviewDoneOpen===true;
+    const treeHTML = openTasks.map(t=>ovTaskHTML(t,0)).join('');
+    const doneHTML = doneTasks.length ? `<div class="ov-done-group"><button type="button" class="ov-done-head${doneOpen?' open':''}" data-ov-done-toggle aria-label="${doneOpen?'收起':'展开'}已完成任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>已完成</span><span class="count">${doneTasks.length}</span></button>${doneOpen? doneTasks.map(t=>ovTaskHTML(t,0)).join('') : ''}</div>` : '';
+    const bodyHTML = (tasks.length) ? treeHTML + doneHTML : '<div class="empty-state" style="padding:26px 10px"><p>该项目暂无任务，打开项目详情添加子任务。</p></div>';
     return `<div class="ov-head">
       <div class="ov-head-top"><h2 id="ovTitle">${escapeHTML(p.name)}</h2><span class="priority-badge" style="background:${PRIORITY_COLOR[p.priority]||PRIORITY_COLOR.P1}">${p.priority||'P1'}</span><span class="type-badge" style="background:${PROJECT_TYPE_COLOR[p.type]||'var(--olive)'}">${escapeHTML(p.type||'项目')}</span>${isArchived(p)?'<span class="priority-badge" style="background:var(--muted)">已归档</span>':''}</div>
       <div class="ov-head-meta"><div class="ov-progress" style="--bar-color:${color}"><span style="width:${pct}%"></span></div><span class="ov-pct-big">${pct}%</span><span>截止 ${formatDateSlash(p.end)}</span></div>
     </div>
-    <div class="ov-tree">${ tasks.length ? tasks.map(t=>ovTaskHTML(t,0)).join('') : '<div class="empty-state" style="padding:26px 10px"><p>该项目暂无任务，打开项目详情添加子任务。</p></div>' }</div>`;
+    <div class="ov-tree">${ bodyHTML }</div>`;
   }
   function ovTaskHTML(t, depth){
     const kids = t.tasks||[];
@@ -2266,6 +2284,11 @@ create policy "ppm own row" on ppm_workbench
     return html;
   }
   function bindOverviewMain(){
+    const doneToggle = els.overviewMain.querySelector('[data-ov-done-toggle]');
+    if(doneToggle) doneToggle.addEventListener('click', ()=>{
+      data.overviewDoneOpen = !data.overviewDoneOpen;
+      renderOverview();
+    });
     els.overviewMain.querySelectorAll('[data-ov-check]').forEach(ch=>ch.addEventListener('change', ()=>{
       const id = ch.dataset.ovCheck;
       if(ch.checked) playCompleteFx(ch.getBoundingClientRect());
