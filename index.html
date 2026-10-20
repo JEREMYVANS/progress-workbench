@@ -594,6 +594,18 @@
   .overview-main{background:var(--panel);border:0.5px solid var(--line);border-radius:16px;padding:18px 20px;min-height:320px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
   .ov-head-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .ov-head-top h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.01em}
+  .ov-add-task-btn{margin-left:auto;border:0.5px solid var(--line-strong);background:var(--olive);color:#fff;font-size:13px;font-weight:600;padding:7px 12px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;flex:0 0 auto}
+  .ov-add-task-btn:hover{filter:brightness(1.05)}
+  .ov-add-task-btn:active{transform:translateY(1px)}
+  .ov-add-child{border:none;background:transparent;color:var(--muted);font-size:16px;line-height:1;width:24px;height:24px;border-radius:7px;cursor:pointer;flex:0 0 auto;display:grid;place-items:center;transition:background .12s,color .12s}
+  .ov-add-child:hover{background:var(--olive-bg,rgba(94,92,230,.12));color:var(--olive)}
+  .ov-quickadd{display:flex;align-items:center;gap:8px;margin:6px 0 6px 0;padding:6px 8px;background:var(--panel2);border:0.5px solid var(--line);border-radius:10px}
+  .ov-quickadd input{flex:1;min-width:0;height:34px;padding:0 10px;border:0.5px solid var(--line);border-radius:8px;font-size:13px;outline:none;background:var(--panel);color:var(--text)}
+  .ov-quickadd input:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
+  .ov-qa-add{border:none;background:var(--olive);color:#fff;font-size:13px;font-weight:600;padding:0 14px;height:34px;border-radius:8px;cursor:pointer;flex:0 0 auto}
+  .ov-qa-add:hover{filter:brightness(1.05)}
+  .ov-qa-cancel{border:none;background:transparent;color:var(--muted);font-size:13px;padding:0 10px;height:34px;border-radius:8px;cursor:pointer;flex:0 0 auto}
+  .ov-qa-cancel:hover{background:var(--panel);color:var(--text)}
   .ov-head-meta{display:flex;align-items:center;gap:12px;margin-top:12px;font-size:12.5px;color:var(--muted)}
   .ov-progress{flex:1;max-width:320px;height:6px;border-radius:4px;background:var(--panel2);overflow:hidden}
   .ov-progress span{display:block;height:100%;border-radius:4px;background:var(--bar-color,var(--blue))}
@@ -2286,6 +2298,27 @@ create policy "ppm own row" on ppm_workbench
   function openArchivedModal(){ renderArchived(); openModal(els.archivedModal); }
 
   /* ---------- 项目总览 ---------- */
+  // 项目总览内的快捷添加：open 是否展开输入框，targetId 为空表示加到当前项目根，否则加到该任务下
+  let ovQuickAdd = {open:false, targetId:null};
+  function ovQuickAddHTML(){
+    return `<div class="ov-quickadd" data-ov-qa>
+      <input type="text" id="ovQaInput" class="ov-qa-input" placeholder="输入任务名称，回车添加" maxlength="40" autocomplete="off" spellcheck="false">
+      <button type="button" class="ov-qa-add" data-ov-qa-add>添加</button>
+      <button type="button" class="ov-qa-cancel" data-ov-qa-cancel>取消</button>
+    </div>`;
+  }
+  function ovCommitQuickAdd(){
+    const inp = document.getElementById('ovQaInput'); if(!inp) return;
+    const name = String(inp.value||'').trim();
+    if(!name){ showToast('请输入任务名称'); return; }
+    const parent = ovQuickAdd.targetId ? getNode(ovQuickAdd.targetId) : (data.projects.find(p=>p.id===data.overviewSelected));
+    if(!parent){ ovQuickAdd={open:false,targetId:null}; return; }
+    parent.tasks = parent.tasks||[];
+    parent.expanded = true; // 展开父节点，确保新加的子任务可见
+    parent.tasks.push({ id:uid(), name, priority:'P2', type:'设计', start:iso(0), end:iso(0), completed:false, expanded:true, tasks:[] });
+    ovQuickAdd = {open:false, targetId:null};
+    saveData(); render(); renderOverview(); showToast('已添加');
+  }
   function ovOrderList(){
     if(!Array.isArray(data.overviewOrder)) data.overviewOrder = [];
     const ids = data.projects.map(p=>p.id);
@@ -2335,11 +2368,12 @@ create policy "ppm own row" on ppm_workbench
     const treeHTML = openTasks.map(t=>ovTaskHTML(t,0)).join('');
     const doneHTML = doneTasks.length ? `<div class="ov-done-group"><button type="button" class="ov-done-head${doneOpen?' open':''}" data-ov-done-toggle aria-label="${doneOpen?'收起':'展开'}已完成任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>已完成</span><span class="count">${doneTasks.length}</span></button>${doneOpen? doneTasks.map(t=>ovTaskHTML(t,0)).join('') : ''}</div>` : '';
     const bodyHTML = (tasks.length) ? treeHTML + doneHTML : '<div class="empty-state" style="padding:26px 10px"><p>该项目暂无任务，打开项目详情添加子任务。</p></div>';
+    const rootQA = (ovQuickAdd.open && ovQuickAdd.targetId===null) ? ovQuickAddHTML() : '';
     return `<div class="ov-head">
-      <div class="ov-head-top"><h2 id="ovTitle">${escapeHTML(p.name)}</h2><span class="priority-badge" style="background:${PRIORITY_COLOR[p.priority]||PRIORITY_COLOR.P1}">${p.priority||'P1'}</span><span class="type-badge" style="background:${PROJECT_TYPE_COLOR[p.type]||'var(--olive)'}">${escapeHTML(p.type||'项目')}</span>${isArchived(p)?'<span class="priority-badge" style="background:var(--muted)">已归档</span>':''}</div>
+      <div class="ov-head-top"><h2 id="ovTitle">${escapeHTML(p.name)}</h2><span class="priority-badge" style="background:${PRIORITY_COLOR[p.priority]||PRIORITY_COLOR.P1}">${p.priority||'P1'}</span><span class="type-badge" style="background:${PROJECT_TYPE_COLOR[p.type]||'var(--olive)'}">${escapeHTML(p.type||'项目')}</span>${isArchived(p)?'<span class="priority-badge" style="background:var(--muted)">已归档</span>':''}<button type="button" class="ov-add-task-btn" data-ov-add-root>＋ 新增任务</button></div>
       <div class="ov-head-meta"><div class="ov-progress" style="--bar-color:${color}"><span style="width:${pct}%"></span></div><span class="ov-pct-big">${pct}%</span><span>截止 ${formatDateSlash(p.end)}</span></div>
     </div>
-    <div class="ov-tree">${ bodyHTML }</div>`;
+    <div class="ov-tree">${ rootQA + bodyHTML }</div>`;
   }
   function ovTaskHTML(t, depth){
     const kids = t.tasks||[];
@@ -2347,8 +2381,14 @@ create policy "ppm own row" on ppm_workbench
     const expanded = t.expanded!==false;
     const pct = Math.round(calcProgress(t)*100);
     const overdue = !t.completed && t.end && parseISO(t.end) < todayDate;
-    let html = `<div class="ov-task${t.completed?' done':''}${overdue?' overdue':''}" data-ov-task="${t.id}" style="--indent:${depth*22}px"><div class="ov-task-main">${hasKids?`<button type="button" class="ov-twist${expanded?' open':''}" data-ov-twist="${t.id}" aria-label="${expanded?'收起':'展开'}子任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`:'<span class="ov-twist-spacer"></span>'}<input type="checkbox" class="ov-check" data-ov-check="${t.id}" ${t.completed?'checked':''} aria-label="完成 ${escapeHTML(t.name)}"><span class="ov-task-name" title="点击查看详情">${escapeHTML(t.name)}</span><span class="type-badge" style="background:${typeColor(t.type)}">${escapeHTML(t.type||'设计')}</span>${overdue?'<span class="priority-badge" style="background:var(--p0)">逾期</span>':''}<span class="ov-task-due">截止 ${formatDateSlash(t.end)}</span>${hasKids?`<span class="ov-task-pct">${pct}%</span>`:''}</div></div>`;
-    if(hasKids && expanded) html += kids.map(k=>ovTaskHTML(k, depth+1)).join('');
+    const childBtn = `<button type="button" class="ov-add-child" data-ov-add-child="${t.id}" aria-label="添加子任务" title="添加子任务">＋</button>`;
+    let html = `<div class="ov-task${t.completed?' done':''}${overdue?' overdue':''}" data-ov-task="${t.id}" style="--indent:${depth*22}px"><div class="ov-task-main">${hasKids?`<button type="button" class="ov-twist${expanded?' open':''}" data-ov-twist="${t.id}" aria-label="${expanded?'收起':'展开'}子任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`:'<span class="ov-twist-spacer"></span>'}<input type="checkbox" class="ov-check" data-ov-check="${t.id}" ${t.completed?'checked':''} aria-label="完成 ${escapeHTML(t.name)}"><span class="ov-task-name" title="点击查看详情">${escapeHTML(t.name)}</span>${childBtn}<span class="type-badge" style="background:${typeColor(t.type)}">${escapeHTML(t.type||'设计')}</span>${overdue?'<span class="priority-badge" style="background:var(--p0)">逾期</span>':''}<span class="ov-task-due">截止 ${formatDateSlash(t.end)}</span>${hasKids?`<span class="ov-task-pct">${pct}%</span>`:''}</div></div>`;
+    if(hasKids && expanded){
+      const open = kids.filter(k=>!k.completed);
+      const done = kids.filter(k=>k.completed);
+      html += open.map(k=>ovTaskHTML(k, depth+1)).join('') + done.map(k=>ovTaskHTML(k, depth+1)).join('');
+    }
+    if(ovQuickAdd.open && ovQuickAdd.targetId===t.id) html += ovQuickAddHTML();
     return html;
   }
   function bindOverviewMain(){
@@ -2357,6 +2397,24 @@ create policy "ppm own row" on ppm_workbench
       data.overviewDoneOpen = !data.overviewDoneOpen;
       renderOverview();
     });
+    const rootAdd = els.overviewMain.querySelector('[data-ov-add-root]');
+    if(rootAdd) rootAdd.addEventListener('click', ()=>{
+      ovQuickAdd = {open:true, targetId:null};
+      renderOverview();
+      const inp = document.getElementById('ovQaInput'); if(inp) inp.focus();
+    });
+    els.overviewMain.querySelectorAll('[data-ov-add-child]').forEach(b=>b.addEventListener('click', e=>{
+      e.stopPropagation();
+      ovQuickAdd = {open:true, targetId:b.dataset.ovAddChild};
+      renderOverview();
+      const inp = document.getElementById('ovQaInput'); if(inp) inp.focus();
+    }));
+    const qaAdd = els.overviewMain.querySelector('[data-ov-qa-add]');
+    if(qaAdd) qaAdd.addEventListener('click', ()=>ovCommitQuickAdd());
+    const qaCancel = els.overviewMain.querySelector('[data-ov-qa-cancel]');
+    if(qaCancel) qaCancel.addEventListener('click', ()=>{ ovQuickAdd={open:false,targetId:null}; renderOverview(); });
+    const qaInput = document.getElementById('ovQaInput');
+    if(qaInput) qaInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); ovCommitQuickAdd(); } else if(e.key==='Escape'){ ovQuickAdd={open:false,targetId:null}; renderOverview(); } });
     els.overviewMain.querySelectorAll('[data-ov-check]').forEach(ch=>ch.addEventListener('change', ()=>{
       const id = ch.dataset.ovCheck;
       if(ch.checked) playCompleteFx(ch.getBoundingClientRect());
