@@ -416,11 +416,26 @@
   .type-combo .combo-item:hover,.type-combo .combo-item.active{background:var(--panel2)}
   .type-combo .combo-item .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
   .type-combo .combo-item .combo-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .type-combo .combo-item .drag-handle{color:var(--muted);cursor:grab;opacity:.55;flex:0 0 auto;display:grid;place-items:center;width:16px;height:22px;border-radius:4px;touch-action:none}
-  .type-combo .combo-item .drag-handle:hover{opacity:1;color:var(--text);background:var(--panel2)}
   .type-combo .combo-item.dragging{opacity:.4}
   .type-combo .combo-item.added::after{content:"＋ 新建";margin-left:auto;font-size:11px;color:var(--olive);flex:0 0 auto}
   .type-combo .combo-item.empty{color:var(--muted);cursor:default}
+  .type-combo .combo-manage{display:flex;align-items:center;gap:8px;margin-top:4px;padding:8px 10px;border-top:0.5px solid var(--line);color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;user-select:none;-webkit-user-select:none}
+  .type-combo .combo-manage:hover{color:var(--text);background:var(--panel2);border-radius:8px}
+  .type-combo .combo-manage svg{flex:0 0 auto}
+  /* 管理类型弹窗 */
+  .tm-list{display:flex;flex-direction:column;gap:2px}
+  .tm-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;font-size:14px;color:var(--text);background:transparent;user-select:none;-webkit-user-select:none}
+  .tm-item:hover{background:var(--panel2)}
+  .tm-item .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .tm-item .tm-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tm-item .drag-handle{color:var(--muted);cursor:grab;opacity:.55;flex:0 0 auto;display:grid;place-items:center;width:18px;height:24px;border-radius:4px;touch-action:none}
+  .tm-item .drag-handle:hover{opacity:1;color:var(--text);background:var(--panel2)}
+  .tm-item.dragging{opacity:.4}
+  .tm-item .tm-del{border:none;background:transparent;color:var(--muted);font-size:16px;line-height:1;width:26px;height:26px;border-radius:7px;cursor:pointer;flex:0 0 auto;display:grid;place-items:center}
+  .tm-item .tm-del:hover{background:var(--p0-bg,rgba(255,59,48,.12));color:var(--p0,#ff3b30)}
+  .tm-addrow{display:flex;gap:8px;margin-top:12px}
+  .tm-addrow input{flex:1;min-width:0}
+  .tm-hint{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5}
   .detail-progress{display:flex;align-items:center;gap:10px;margin-top:14px}
   .detail-progress .bar{flex:1;height:8px;border-radius:99px;background:rgba(60,60,67,.10);overflow:hidden}
   html[data-theme="dark"] .detail-progress .bar{background:rgba(255,255,255,.10)}
@@ -661,6 +676,10 @@
 </div></div>
 
 <!-- 项目预览表弹窗 -->
+<div class="modal-overlay" id="typeManageModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="typeManageTitle" style="max-width:420px">
+  <div class="modal-head"><div class="modal-title-wrap"><h3 id="typeManageTitle">管理类型</h3></div><button class="close" type="button" data-close="typeManageModal" aria-label="关闭">×</button></div>
+  <div id="typeManageBody"></div>
+</div></div>
 <div class="modal-overlay" id="projectListModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="projectListTitle">
   <div class="modal-head"><div class="modal-title-wrap"><h3 id="projectListTitle">项目预览表</h3><div class="breadcrumb">按状态查看所有项目</div></div><button class="close" type="button" data-close="projectListModal" aria-label="关闭">×</button></div>
   <div id="projectListBody"></div>
@@ -905,10 +924,12 @@ create policy "ppm own row" on ppm_workbench
   function priorityText(p){ return p==='P0'?'高':p==='P1'?'中':'低'; }
 
   /* ---------- 数据与树 ---------- */
-  // 类型排序：data.typeOrder 持久化用户拖拽的顺序；新类型追加到末尾
+  // 类型排序：data.typeOrder 持久化用户在「管理类型」里调整的顺序；新类型追加到末尾
+  // data.deletedTypes 记录被删除的内置类型，避免重启后被 TASK_TYPES 复活
   function typeOrderList(){
     if(!Array.isArray(data.typeOrder)) data.typeOrder = [];
-    const known = [...TASK_TYPES, ...(data.customTypes||[])];
+    if(!Array.isArray(data.deletedTypes)) data.deletedTypes = [];
+    const known = [...TASK_TYPES, ...(data.customTypes||[])].filter(t=>!data.deletedTypes.includes(t));
     data.typeOrder = data.typeOrder.filter(t=>known.includes(t));
     known.forEach(t=>{ if(!data.typeOrder.includes(t)) data.typeOrder.push(t); });
     return data.typeOrder;
@@ -918,6 +939,7 @@ create policy "ppm own row" on ppm_workbench
     t = String(t||'').trim();
     if(!t) return;
     let changed = false;
+    if((data.deletedTypes||[]).includes(t)){ data.deletedTypes = data.deletedTypes.filter(x=>x!==t); changed = true; } // 重新添加被删过的内置类型
     if(!TASK_TYPES.includes(t) && !(data.customTypes||[]).includes(t)){ data.customTypes.push(t); changed = true; }
     if(!typeOrderList().includes(t)){ data.typeOrder.push(t); changed = true; }
     if(changed) saveData();
@@ -1959,13 +1981,12 @@ create policy "ppm own row" on ppm_workbench
     const toggle = wrap.querySelector('.combo-toggle');
     const list = wrap.querySelector('.combo-list');
     const open = ()=>{
-      const q = (input.value||'').trim().toLowerCase();
-      const all = typeOptions();
-      const matched = all.filter(t=> !q || t.toLowerCase().includes(q));
-      const exact = all.some(t=> t.toLowerCase() === q);
-      let html = matched.map(t=>`<div class="combo-item" data-val="${escapeHTML(t)}"><span class="drag-handle" title="拖动排序" aria-hidden="true"><svg viewBox="0 0 8 14" width="8" height="14"><g fill="currentColor"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></g></svg></span><span class="dot" style="background:${typeColor(t)}"></span><span class="combo-label">${escapeHTML(t)}</span></div>`).join('');
-      if(q && !exact) html += `<div class="combo-item added" data-val="${escapeHTML(input.value.trim())}"><span class="dot" style="background:${typeColor(input.value.trim())}"></span><span class="combo-label">${escapeHTML(input.value.trim())}</span></div>`;
-      if(!html) html = '<div class="combo-item empty">无匹配，回车即可新建</div>';
+      const q = (input.value||'').trim();
+      const all = typeOptions(); // 始终显示全部类型，不做输入过滤
+      const exact = all.some(t=> t.toLowerCase() === q.toLowerCase());
+      let html = all.map(t=>`<div class="combo-item" data-val="${escapeHTML(t)}"><span class="dot" style="background:${typeColor(t)}"></span><span class="combo-label">${escapeHTML(t)}</span></div>`).join('');
+      if(q && !exact) html += `<div class="combo-item added" data-val="${escapeHTML(q)}"><span class="dot" style="background:${typeColor(q)}"></span><span class="combo-label">＋ 新建「${escapeHTML(q)}」</span></div>`;
+      html += `<div class="combo-manage" data-manage="1"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 5.2A2.8 2.8 0 1 0 8 10.8 2.8 2.8 0 0 0 8 5.2Zm6.3 3.9-.1-.7.9-.8-1-1.7-1.1.4-.6-.4-.2-1.2h-2l-.2 1.2-.6.4-1.1-.4-1 1.7.9.8-.1.7.1.7-.9.8 1 1.7 1.1-.4.6.4.2 1.2h2l.2-1.2.6-.4 1.1.4 1-1.7-.9-.8.1-.7Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg><span>管理类型</span></div>`;
       list.innerHTML = html; list.hidden = false; wrap.classList.add('open');
       list.querySelectorAll('.combo-item[data-val]').forEach(it=>{
         it.addEventListener('mousedown', e=>e.preventDefault()); // 防止 blur 抢先关闭
@@ -1974,12 +1995,20 @@ create policy "ppm own row" on ppm_workbench
           input.focus(); input.dispatchEvent(new Event('change')); // change 内会注册新类型
         });
       });
-      bindComboDrag(list);
+      const mg = list.querySelector('[data-manage]');
+      if(mg){
+        mg.addEventListener('mousedown', e=>e.preventDefault());
+        mg.addEventListener('click', e=>{
+          e.stopPropagation();
+          close();
+          openManageTypes();
+        });
+      }
     };
     const close = ()=>{ list.hidden = true; wrap.classList.remove('open'); };
     // 点在列表空白处（列表可能盖住了下方按钮）：关闭列表并把点击"穿透"转发给下层元素
     list.addEventListener('mousedown', e=>{
-      if(e.target.closest('.combo-item')) return;
+      if(e.target.closest('.combo-item') || e.target.closest('.combo-manage')) return;
       list.hidden = true; wrap.classList.remove('open');
       const beneath = document.elementFromPoint(e.clientX, e.clientY);
       if(beneath && !wrap.contains(beneath)){
@@ -2010,20 +2039,59 @@ create policy "ppm own row" on ppm_workbench
       if(v && !typeOptions().includes(v)) registerCustomType(v);
     });
   }
-  // 下拉项拖拽排序（pointer 事件，跨浏览器稳定）；排序写入 data.typeOrder 并立即持久化
-  function bindComboDrag(list){
+  /* ---------- 管理类型弹窗：添加 / 删除 / 拖拽排序 ---------- */
+  function openManageTypes(){
+    renderTypeManage();
+    openModal($('typeManageModal'));
+  }
+  function renderTypeManage(){
+    const body = $('typeManageBody'); if(!body) return;
+    const all = typeOrderList();
+    const gearIcon = '<svg viewBox="0 0 8 14" width="8" height="14" aria-hidden="true"><g fill="currentColor"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></g></svg>';
+    body.innerHTML = `
+      <div class="tm-list" id="tmList">${ all.map(t=>`
+        <div class="tm-item" data-val="${escapeHTML(t)}">
+          <span class="drag-handle" title="拖动排序" aria-hidden="true">${gearIcon}</span>
+          <span class="dot" style="background:${typeColor(t)}"></span>
+          <span class="tm-name">${escapeHTML(t)}</span>
+          <button type="button" class="tm-del" data-del="${escapeHTML(t)}" aria-label="删除 ${escapeHTML(t)}">×</button>
+        </div>`).join('') }</div>
+      <div class="tm-addrow">
+        <input type="text" id="tmNew" placeholder="输入新类型名称" maxlength="12">
+        <button type="button" class="btn primary" id="tmAdd">添加</button>
+      </div>
+      <p class="tm-hint">上下拖动 <strong>⋮⋮</strong> 调整顺序；删除只是从选择列表移除，不影响已使用该类型的任务。</p>`;
+    body.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', ()=>{
+      const t = b.dataset.del;
+      if((data.customTypes||[]).includes(t)) data.customTypes = data.customTypes.filter(x=>x!==t);
+      if(TASK_TYPES.includes(t)) data.deletedTypes.push(t); // 内置类型记入删除名单，防止重启复活
+      data.typeOrder = typeOrderList().filter(x=>x!==t);
+      saveData(); renderTypeManage(); render(); // 今日看板等处的类型分组同步刷新
+    }));
+    const inp = $('tmNew');
+    const doAdd = ()=>{
+      const v = String(inp.value||'').trim(); if(!v) return;
+      registerCustomType(v); inp.value=''; renderTypeManage(); render();
+      const items = $('tmList').querySelectorAll('.tm-item');
+      if(items.length) items[items.length-1].scrollIntoView({block:'nearest', behavior:'smooth'});
+    };
+    $('tmAdd').addEventListener('click', doAdd);
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } });
+    bindTypeManageDrag($('tmList'));
+  }
+  // 管理弹窗内拖拽排序（pointer 事件，复用原下拉的排序交互）；排序写入 data.typeOrder 并立即持久化
+  function bindTypeManageDrag(list){
+    if(!list) return;
     let dragEl = null;
     list.querySelectorAll('.drag-handle').forEach(h=>{
       const finish = ()=>{
         if(!dragEl) return;
         dragEl.classList.remove('dragging'); dragEl = null;
-        const shown = [...list.querySelectorAll('.combo-item[data-val]')].map(el=>el.dataset.val).filter(v=>v);
-        const rest = typeOptions().filter(t=>!shown.includes(t));
-        data.typeOrder = shown.concat(rest);
+        data.typeOrder = [...list.querySelectorAll('.tm-item')].map(el=>el.dataset.val).filter(v=>v);
         saveData();
       };
       h.addEventListener('pointerdown', e=>{
-        const item = h.closest('.combo-item'); if(!item) return;
+        const item = h.closest('.tm-item'); if(!item) return;
         dragEl = item; item.classList.add('dragging');
         try{ h.setPointerCapture(e.pointerId); }catch(_){}
         e.preventDefault(); e.stopPropagation();
@@ -2031,8 +2099,8 @@ create policy "ppm own row" on ppm_workbench
       h.addEventListener('pointermove', e=>{
         if(!dragEl) return;
         const over = document.elementFromPoint(e.clientX, e.clientY);
-        const target = over && over.closest ? over.closest('.combo-item[data-val]') : null;
-        if(target && target!==dragEl && !target.classList.contains('added') && !target.classList.contains('empty')){
+        const target = over && over.closest ? over.closest('.tm-item') : null;
+        if(target && target!==dragEl){
           const r = target.getBoundingClientRect();
           const before = (e.clientY - r.top) < r.height/2;
           list.insertBefore(dragEl, before ? target : target.nextSibling);
