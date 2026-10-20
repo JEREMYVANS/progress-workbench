@@ -1116,7 +1116,8 @@ create policy "ppm own row" on ppm_workbench
           if(seen.has(k)) continue; seen.add(k); trimmed.push(h);
           if(trimmed.length >= 10) break;
         }
-        const payload = { projects: data.projects, _savedAt: Date.now(), todaySort: data.todaySort, todayManual: data.todayManual };
+        const payload = { projects: data.projects, _savedAt: Date.now(), todaySort: data.todaySort, todayManual: data.todayManual,
+          customTypes: data.customTypes||[], typeOrder: data.typeOrder||[], deletedTypes: data.deletedTypes||[], overviewOrder: data.overviewOrder||[] };
         if(trimmed.length) payload._history = trimmed;
         await sbUpsertRow(payload);
         lastPushDoneTs = Date.now();
@@ -1171,9 +1172,12 @@ create policy "ppm own row" on ppm_workbench
         try{ if(data.projects.length) localStorage.setItem(LS_KEY+'_bak', JSON.stringify({ ts: Date.now(), projects: data.projects })); }catch(e){}
         // 拉取覆盖前先保留本地视图态（排序/自定义顺序），云端副本若未存这些字段则不覆盖，避免排序被打回默认「类型」
         const _prevSort = data.todaySort, _prevManual = data.todayManual;
+        // 类型管理与总览排序等本地字段：云端副本若缺失（旧版本推送没带），保留本地值不被抹掉
+        const _prevLocal = { customTypes: data.customTypes, typeOrder: data.typeOrder, deletedTypes: data.deletedTypes, overviewOrder: data.overviewOrder };
         data = remote; normalizeTypes(data.projects, true); lastSavedAt = data._savedAt || Date.now();
         if(!data.todaySort && _prevSort) data.todaySort = _prevSort;
         if(!data.todayManual && _prevManual) data.todayManual = _prevManual;
+        Object.keys(_prevLocal).forEach(k=>{ if(!Array.isArray(data[k]) && Array.isArray(_prevLocal[k])) data[k] = _prevLocal[k]; });
         ensureProjectColors(); // 云端拉回旧颜色后，强制按当前项目顺序重新分配黄金角色相
         try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){}
         render(); updateSyncBtn();
@@ -2001,7 +2005,7 @@ create policy "ppm own row" on ppm_workbench
       const all = typeOptions(); // 始终显示全部类型，不做输入过滤
       const exact = all.some(t=> t.toLowerCase() === q.toLowerCase());
       let html = all.map(t=>`<div class="combo-item" data-val="${escapeHTML(t)}"><span class="dot" style="background:${typeColor(t)}"></span><span class="combo-label">${escapeHTML(t)}</span></div>`).join('');
-      if(q && !exact) html += `<div class="combo-item added" data-val="${escapeHTML(q)}"><span class="dot" style="background:${typeColor(q)}"></span><span class="combo-label">＋ 新建「${escapeHTML(q)}」</span></div>`;
+      if(q && !exact) html += `<div class="combo-item added" data-val="${escapeHTML(q)}" title="新建类型「${escapeHTML(q)}」"><span class="dot" style="background:${typeColor(q)}"></span><span class="combo-label">「${escapeHTML(q)}」</span></div>`;
       html += `<div class="combo-manage" data-manage="1"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 5.2A2.8 2.8 0 1 0 8 10.8 2.8 2.8 0 0 0 8 5.2Zm6.3 3.9-.1-.7.9-.8-1-1.7-1.1.4-.6-.4-.2-1.2h-2l-.2 1.2-.6.4-1.1-.4-1 1.7.9.8-.1.7.1.7-.9.8 1 1.7 1.1-.4.6.4.2 1.2h2l.2-1.2.6-.4 1.1.4 1-1.7-.9-.8.1-.7Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg><span>管理类型</span></div>`;
       list.innerHTML = html; list.hidden = false; wrap.classList.add('open');
       list.querySelectorAll('.combo-item[data-val]').forEach(it=>{
