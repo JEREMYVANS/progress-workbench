@@ -606,6 +606,10 @@
   .ov-qa-add:hover{filter:brightness(1.05)}
   .ov-qa-cancel{border:none;background:transparent;color:var(--muted);font-size:13px;padding:0 10px;height:34px;border-radius:8px;cursor:pointer;flex:0 0 auto}
   .ov-qa-cancel:hover{background:var(--panel);color:var(--text)}
+  .ov-qa-select{height:34px;padding:0 4px;border:0.5px solid var(--line);border-radius:8px;font-size:12.5px;outline:none;background:var(--panel);color:var(--text);flex:0 0 auto;cursor:pointer;-webkit-appearance:none;appearance:none;text-align:center}
+  .ov-qa-select:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
+  .ov-title-click{cursor:pointer;transition:color .12s}
+  .ov-title-click:hover{color:var(--olive)}
   .ov-head-meta{display:flex;align-items:center;gap:12px;margin-top:12px;font-size:12.5px;color:var(--muted)}
   .ov-progress{flex:1;max-width:320px;height:6px;border-radius:4px;background:var(--panel2);overflow:hidden}
   .ov-progress span{display:block;height:100%;border-radius:4px;background:var(--bar-color,var(--blue))}
@@ -2301,7 +2305,11 @@ create policy "ppm own row" on ppm_workbench
   // 项目总览内的快捷添加：open 是否展开输入框，targetId 为空表示加到当前项目根，否则加到该任务下
   let ovQuickAdd = {open:false, targetId:null};
   function ovQuickAddHTML(){
+    const priOpts = ['P0','P1'].map(p=>`<option value="${p}"${p==='P1'?' selected':''}>${p}</option>`).join('');
+    const typeOpts = typeOptions().map(t=>`<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`).join('');
     return `<div class="ov-quickadd" data-ov-qa>
+      <select class="ov-qa-select" data-ov-qa-priority aria-label="优先级">${priOpts}</select>
+      <select class="ov-qa-select" data-ov-qa-type aria-label="类型">${typeOpts}</select>
       <input type="text" id="ovQaInput" class="ov-qa-input" placeholder="输入任务名称，回车添加" maxlength="40" autocomplete="off" spellcheck="false">
       <button type="button" class="ov-qa-add" data-ov-qa-add>添加</button>
       <button type="button" class="ov-qa-cancel" data-ov-qa-cancel>取消</button>
@@ -2311,11 +2319,16 @@ create policy "ppm own row" on ppm_workbench
     const inp = document.getElementById('ovQaInput'); if(!inp) return;
     const name = String(inp.value||'').trim();
     if(!name){ showToast('请输入任务名称'); return; }
+    const priSel = els.overviewMain.querySelector('[data-ov-qa-priority]');
+    const typeSel = els.overviewMain.querySelector('[data-ov-qa-type]');
+    const pri = (priSel && priSel.value) || 'P1';
+    const typ = (typeSel && typeSel.value) || '设计';
+    if(typ && !TASK_TYPES.includes(typ) && !(data.customTypes||[]).includes(typ)) registerCustomType(typ);
     const parent = ovQuickAdd.targetId ? getNode(ovQuickAdd.targetId) : (data.projects.find(p=>p.id===data.overviewSelected));
     if(!parent){ ovQuickAdd={open:false,targetId:null}; return; }
     parent.tasks = parent.tasks||[];
     parent.expanded = true; // 展开父节点，确保新加的子任务可见
-    parent.tasks.push({ id:uid(), name, priority:'P2', type:'设计', start:iso(0), end:iso(0), completed:false, expanded:true, tasks:[] });
+    parent.tasks.push({ id:uid(), name, priority:pri, type:typ, start:iso(0), end:iso(0), completed:false, expanded:true, tasks:[] });
     ovQuickAdd = {open:false, targetId:null};
     saveData(); render(); renderOverview(); showToast('已添加');
   }
@@ -2370,7 +2383,7 @@ create policy "ppm own row" on ppm_workbench
     const bodyHTML = (tasks.length) ? treeHTML + doneHTML : '<div class="empty-state" style="padding:26px 10px"><p>该项目暂无任务，打开项目详情添加子任务。</p></div>';
     const rootQA = (ovQuickAdd.open && ovQuickAdd.targetId===null) ? ovQuickAddHTML() : '';
     return `<div class="ov-head">
-      <div class="ov-head-top"><h2 id="ovTitle">${escapeHTML(p.name)}</h2><span class="priority-badge" style="background:${PRIORITY_COLOR[p.priority]||PRIORITY_COLOR.P1}">${p.priority||'P1'}</span><span class="type-badge" style="background:${PROJECT_TYPE_COLOR[p.type]||'var(--olive)'}">${escapeHTML(p.type||'项目')}</span>${isArchived(p)?'<span class="priority-badge" style="background:var(--muted)">已归档</span>':''}<button type="button" class="ov-add-task-btn" data-ov-add-root>＋ 新增任务</button></div>
+      <div class="ov-head-top"><h2 id="ovTitle" class="ov-title-click" data-ov-title="${p.id}" title="点击查看项目详情">${escapeHTML(p.name)}</h2><span class="priority-badge" style="background:${PRIORITY_COLOR[p.priority]||PRIORITY_COLOR.P1}">${p.priority||'P1'}</span><span class="type-badge" style="background:${PROJECT_TYPE_COLOR[p.type]||'var(--olive)'}">${escapeHTML(p.type||'项目')}</span>${isArchived(p)?'<span class="priority-badge" style="background:var(--muted)">已归档</span>':''}<button type="button" class="ov-add-task-btn" data-ov-add-root>＋ 新增任务</button></div>
       <div class="ov-head-meta"><div class="ov-progress" style="--bar-color:${color}"><span style="width:${pct}%"></span></div><span class="ov-pct-big">${pct}%</span><span>截止 ${formatDateSlash(p.end)}</span></div>
     </div>
     <div class="ov-tree">${ rootQA + bodyHTML }</div>`;
@@ -2382,7 +2395,7 @@ create policy "ppm own row" on ppm_workbench
     const pct = Math.round(calcProgress(t)*100);
     const overdue = !t.completed && t.end && parseISO(t.end) < todayDate;
     const childBtn = `<button type="button" class="ov-add-child" data-ov-add-child="${t.id}" aria-label="添加子任务" title="添加子任务">＋</button>`;
-    let html = `<div class="ov-task${t.completed?' done':''}${overdue?' overdue':''}" data-ov-task="${t.id}" style="--indent:${depth*22}px"><div class="ov-task-main">${hasKids?`<button type="button" class="ov-twist${expanded?' open':''}" data-ov-twist="${t.id}" aria-label="${expanded?'收起':'展开'}子任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`:'<span class="ov-twist-spacer"></span>'}<input type="checkbox" class="ov-check" data-ov-check="${t.id}" ${t.completed?'checked':''} aria-label="完成 ${escapeHTML(t.name)}"><span class="ov-task-name" title="点击查看详情">${escapeHTML(t.name)}</span>${childBtn}<span class="type-badge" style="background:${typeColor(t.type)}">${escapeHTML(t.type||'设计')}</span>${overdue?'<span class="priority-badge" style="background:var(--p0)">逾期</span>':''}<span class="ov-task-due">截止 ${formatDateSlash(t.end)}</span>${hasKids?`<span class="ov-task-pct">${pct}%</span>`:''}</div></div>`;
+    let html = `<div class="ov-task${t.completed?' done':''}${overdue?' overdue':''}" data-ov-task="${t.id}" style="--indent:${depth*22}px"><div class="ov-task-main">${hasKids?`<button type="button" class="ov-twist${expanded?' open':''}" data-ov-twist="${t.id}" aria-label="${expanded?'收起':'展开'}子任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`:'<span class="ov-twist-spacer"></span>'}<input type="checkbox" class="ov-check" data-ov-check="${t.id}" ${t.completed?'checked':''} aria-label="完成 ${escapeHTML(t.name)}"><span class="type-badge" style="background:${typeColor(t.type)}">${escapeHTML(t.type||'设计')}</span><span class="ov-task-name" title="点击查看详情">${escapeHTML(t.name)}</span>${childBtn}${overdue?'<span class="priority-badge" style="background:var(--p0)">逾期</span>':''}<span class="ov-task-due">截止 ${formatDateSlash(t.end)}</span>${hasKids?`<span class="ov-task-pct">${pct}%</span>`:''}</div></div>`;
     if(hasKids && expanded){
       const open = kids.filter(k=>!k.completed);
       const done = kids.filter(k=>k.completed);
@@ -2392,6 +2405,8 @@ create policy "ppm own row" on ppm_workbench
     return html;
   }
   function bindOverviewMain(){
+    const titleEl = els.overviewMain.querySelector('[data-ov-title]');
+    if(titleEl) titleEl.addEventListener('click', ()=>openDetail(titleEl.dataset.ovTitle));
     const doneToggle = els.overviewMain.querySelector('[data-ov-done-toggle]');
     if(doneToggle) doneToggle.addEventListener('click', ()=>{
       data.overviewDoneOpen = !data.overviewDoneOpen;
