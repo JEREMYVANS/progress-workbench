@@ -2051,8 +2051,21 @@ create policy "ppm own row" on ppm_workbench
         } else { close(); input.blur(); }
       }
     });
-    input.addEventListener('blur', ()=> setTimeout(close, 150));
+    // 仅在焦点真正离开整个组合框时才关闭：Safari 点击已聚焦输入框时会触发瞬时 blur，
+    // 用 120ms 后复查 activeElement 规避，避免把刚点开的下拉误关（表现为“闪一下缩回”）
+    input.addEventListener('blur', ()=>{ setTimeout(()=>{ if(!wrap.contains(document.activeElement)) close(); }, 120); });
     toggle.addEventListener('click', e=>{ e.preventDefault(); if(list.hidden) open(); else close(); input.focus(); });
+    // 全局：指针按下落在下拉外部时关闭（替代脆弱的 blur 计时器，鼠标点击离场也能可靠关闭）
+    if(!document.__comboOutsideBound){
+      document.addEventListener('mousedown', (e)=>{
+        if(e.target && e.target.closest && e.target.closest('.type-combo.open')) return;
+        document.querySelectorAll('.type-combo.open').forEach(w=>{
+          const l = w.querySelector('.combo-list'); if(l) l.hidden = true;
+          w.classList.remove('open');
+        });
+      }, true);
+      document.__comboOutsideBound = true;
+    }
     // 值变化时把未收录的新类型立即注册（两个组合框、详情与添加子任务共用此逻辑）
     input.addEventListener('change', ()=>{
       const v = String(input.value||'').trim();
