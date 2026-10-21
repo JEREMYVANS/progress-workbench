@@ -841,10 +841,12 @@ create policy "ppm own row" on ppm_workbench
   function parseHslStr(s){ const m=s.match(/hsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*\)/); return m?[+m[1]/360,+m[2]/100,+m[3]/100]:[0,0,0]; }
   function srgbLinear(v){ v/=255; return v<=0.04045?v/12.92:Math.pow((v+0.055)/1.055,2.4); }
   function rgbToOklab([r,g,b]){
+    // 正确的 linear-sRGB → LMS 矩阵（Ottosson OKLab）。此前误用了 XYZ→LMS 系数，
+    // 导致 OKLab 距离全错、按距离挑色的逻辑失效（类型/项目配色撞色）
     const lr=srgbLinear(r), lg=srgbLinear(g), lb=srgbLinear(b);
-    const l=0.8189330101*lr+0.3618667424*lg-0.1288597137*lb;
-    const m=0.0329845436*lr+0.9293118715*lg+0.0361456387*lb;
-    const s=0.0482003018*lr+0.2643662691*lg+0.6338517070*lb;
+    const l=0.4122214708*lr+0.5363325363*lg+0.0514459929*lb;
+    const m=0.2119034982*lr+0.6806995451*lg+0.1073969566*lb;
+    const s=0.0883024619*lr+0.2817188376*lg+0.6299787005*lb;
     const l_=Math.cbrt(l), m_=Math.cbrt(m), s_=Math.cbrt(s);
     return [0.2104542553*l_+0.7936177850*m_-0.0040720468*s_,
             1.9779984951*l_-2.4285922050*m_+0.4505937099*s_,
@@ -888,7 +890,35 @@ create policy "ppm own row" on ppm_workbench
     const t = String(type||'').trim();
     if(TASK_TYPE_COLOR[t]) return TASK_TYPE_COLOR[t];
     if(!t) return '#64748b';
-    return nameColor(t);
+    const m = customTypeColorMap();
+    if(m[t]) return m[t];
+    return nameColor(t); // 兜底：类型不在排序表里时才走哈希色
+  }
+  // 自定义类型配色：不再按名字哈希取色（哈希撞桶会导致 PPT/会议/打样 全是同色系青绿，无法区分），
+  // 改为按 typeOrderList 顺序从候选池里贪心挑选——每次取与「内置类型色 + 已选自定义色」OKLab 距离最大的颜色，
+  // 保证任意两个类型的颜色都可辨识。仅依赖 typeOrder（已参与同步），各设备结果一致。
+  const TYPE_RESERVED_LABS = ['#0891b2','#0a84ff','#d97706','#16a34a','#64748b','#9333ea','#ff3b30']
+    .map(hex=>rgbToOklab(hexToRgb(hex))); // 内置6类颜色 + 红色(留给P0/逾期)
+  function hexToRgb(hex){ const h=hex.replace('#',''); return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+  let _ctcCache = { key:null, map:{} };
+  function customTypeColorMap(){
+    const order = typeOrderList().filter(t=>!TASK_TYPE_COLOR[t]);
+    const key = order.join('\u0001');
+    if(_ctcCache.key===key) return _ctcCache.map;
+    const map = {};
+    const used = TYPE_RESERVED_LABS.slice();
+    const pool = candidatePool().map(css=>({css, lab:rgbToOklab(hslToRgb(...parseHslStr(css)))}));
+    for(const t of order){
+      let best=null, bestD=-1;
+      for(const c of pool){
+        let d=Infinity;
+        for(const u of used){ const dd=oklabDist(c.lab,u); if(dd<d) d=dd; }
+        if(d>bestD){ bestD=d; best=c; }
+      }
+      if(best){ map[t]=best.css; used.push(best.lab); }
+    }
+    _ctcCache = { key, map };
+    return map;
   }
 
   let data = { projects: [] };
