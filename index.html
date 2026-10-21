@@ -929,6 +929,8 @@ create policy "ppm own row" on ppm_workbench
   function dateSerial(d){ return Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000; }
   function daysBetween(a,b){ return Math.round(dateSerial(b)-dateSerial(a)); }
   function addDays(d,n){ const base = (d instanceof Date) ? d : parseISO(d); const x=new Date(base.getFullYear(),base.getMonth(),base.getDate()); x.setDate(x.getDate()+n); return x; }
+  // 全局 iso 偏移助手：相对今天返回 ISO 日期；loadDemo 内部另有同名局部变量，此处供 ovCommitQuickAdd 等全局调用
+  function iso(n){ return toISO(addDays(todayDate, n)); }
   function daysInMonth(y,m){ return new Date(y,m+1,0).getDate(); }
   function addMonthsSafe(d,n){ const y=d.getFullYear(), m=d.getMonth()+n, day=d.getDate(); const first=new Date(y,m,1); first.setDate(Math.min(day,daysInMonth(first.getFullYear(),first.getMonth()))); return first; }
   function addYearsSafe(d,n){ const y=d.getFullYear()+n,m=d.getMonth(),day=d.getDate(); return new Date(y,m,Math.min(day,daysInMonth(y,m))); }
@@ -2462,6 +2464,7 @@ create policy "ppm own row" on ppm_workbench
     }));
     els.overviewMain.querySelectorAll('.ov-task').forEach(row=>row.addEventListener('click', (e)=>{
       if(e.target.closest('.ov-twist') || e.target.matches('input[type=checkbox]')) return;
+      if(e.target.closest('[data-ov-qa]')) return; // 快捷添加框内（输入框/下拉/添加按钮）的点击不触发详情
       openDetail(row.dataset.ovTask);
     }));
   }
