@@ -625,6 +625,10 @@
   .ov-twist:hover{background:var(--panel2);color:var(--text)}
   .ov-twist svg{transition:transform .15s}
   .ov-twist.open svg{transform:rotate(90deg)}
+  .ov-task[draggable="true"]{cursor:grab}
+  .ov-task.dragging{opacity:.4;cursor:grabbing}
+  .ov-task.ov-drop-child{box-shadow:inset 0 0 0 2px var(--blue);background:rgba(10,132,255,.07);border-radius:10px}
+  .ov-head.ov-drop-root{box-shadow:inset 0 0 0 2px var(--blue);border-radius:14px}
   .ov-twist-spacer{width:20px;flex:0 0 auto}
   @media (max-width:860px){
     .overview-layout{grid-template-columns:1fr;gap:12px}
@@ -2444,7 +2448,7 @@ create policy "ppm own row" on ppm_workbench
     const pct = Math.round(calcProgress(t)*100);
     const overdue = !t.completed && t.end && parseISO(t.end) < todayDate;
     const childBtn = `<button type="button" class="ov-add-child" data-ov-add-child="${t.id}" aria-label="添加子任务" title="添加子任务">＋</button>`;
-    let html = `<div class="ov-task${t.completed?' done':''}${overdue?' overdue':''}" data-ov-task="${t.id}" style="--indent:${depth*22}px"><div class="ov-task-main">${hasKids?`<button type="button" class="ov-twist${expanded?' open':''}" data-ov-twist="${t.id}" aria-label="${expanded?'收起':'展开'}子任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`:'<span class="ov-twist-spacer"></span>'}<input type="checkbox" class="ov-check" data-ov-check="${t.id}" ${t.completed?'checked':''} aria-label="完成 ${escapeHTML(t.name)}"><span class="type-badge" style="background:${typeColor(t.type)}">${escapeHTML(t.type||'设计')}</span><span class="ov-task-name" title="点击查看详情">${escapeHTML(t.name)}</span>${childBtn}${overdue?'<span class="priority-badge" style="background:var(--p0)">逾期</span>':''}<span class="ov-task-due">截止 ${formatDateSlash(t.end)}</span>${hasKids?`<span class="ov-task-pct">${pct}%</span>`:''}</div></div>`;
+    let html = `<div class="ov-task${t.completed?' done':''}${overdue?' overdue':''}" data-ov-task="${t.id}" draggable="true" style="--indent:${depth*22}px"><div class="ov-task-main">${hasKids?`<button type="button" class="ov-twist${expanded?' open':''}" data-ov-twist="${t.id}" aria-label="${expanded?'收起':'展开'}子任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`:'<span class="ov-twist-spacer"></span>'}<input type="checkbox" class="ov-check" data-ov-check="${t.id}" ${t.completed?'checked':''} aria-label="完成 ${escapeHTML(t.name)}"><span class="type-badge" style="background:${typeColor(t.type)}">${escapeHTML(t.type||'设计')}</span><span class="ov-task-name" title="点击查看详情">${escapeHTML(t.name)}</span>${childBtn}${overdue?'<span class="priority-badge" style="background:var(--p0)">逾期</span>':''}<span class="ov-task-due">截止 ${formatDateSlash(t.end)}</span>${hasKids?`<span class="ov-task-pct">${pct}%</span>`:''}</div></div>`;
     if(hasKids && expanded){
       const open = kids.filter(k=>!k.completed);
       const done = kids.filter(k=>k.completed);
@@ -2497,6 +2501,7 @@ create policy "ppm own row" on ppm_workbench
       if(e.target.closest('[data-ov-qa]')) return; // 快捷添加框内（输入框/下拉/添加按钮）的点击不触发详情
       openDetail(row.dataset.ovTask);
     }));
+    bindOverviewTaskDrag();
   }
   function bindOverviewSideDrag(){
     const items = els.overviewSide.querySelectorAll('.ov-item[draggable="true"]');
@@ -2534,6 +2539,92 @@ create policy "ppm own row" on ppm_workbench
     order.splice(before ? toIdx : toIdx+1, 0, fromId);
     data.overviewOrder = order;
     saveData(); renderOverview();
+  }
+
+  /* ---------- 项目总览：任务拖拽改父级（嵌套 / 移到顶层） ---------- */
+  function bindOverviewTaskDrag(){
+    const rows = els.overviewMain.querySelectorAll('.ov-task[draggable="true"]');
+    let dragId = null;
+    rows.forEach(row=>{
+      row.addEventListener('dragstart', e=>{
+        if(e.target.closest('[data-ov-qa]')){ e.preventDefault(); return; } // 不从快捷添加框内发起拖拽
+        dragId = row.dataset.ovTask;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try{ e.dataTransfer.setData('text/plain', dragId); }catch(_){}
+      });
+      row.addEventListener('dragend', ()=>{ dragId=null; rows.forEach(r=>r.classList.remove('dragging','ov-drop-child')); });
+      row.addEventListener('dragover', e=>{
+        if(!dragId) return;
+        if(e.target.closest('[data-ov-qa]')) return; // 快捷添加框内不接收放置
+        const tgt = e.target.closest('.ov-task');
+        if(!tgt || tgt!==row) return; // 仅本行处理（嵌套子行的事件已 stopPropagation）
+        if(tgt.dataset.ovTask===dragId){ e.preventDefault(); return; } // 不能拖到自己
+        const toPath = findNodePath(tgt.dataset.ovTask) || [];
+        if(toPath.includes(dragId)) return; // 不能拖到自己的后代下（会断链）
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.stopPropagation();
+        rows.forEach(r=>{ if(r!==row) r.classList.remove('ov-drop-child'); });
+        row.classList.add('ov-drop-child');
+      });
+      row.addEventListener('dragleave', e=>{ if(!row.contains(e.relatedTarget)) row.classList.remove('ov-drop-child'); });
+      row.addEventListener('drop', e=>{
+        e.preventDefault(); e.stopPropagation();
+        row.classList.remove('ov-drop-child');
+        const targetId = row.dataset.ovTask;
+        if(!dragId || targetId===dragId) return;
+        reparentTask(dragId, targetId);
+      });
+    });
+    // 项目头部作为“移到项目顶层”的放置区（用于取消嵌套）
+    const head = els.overviewMain.querySelector('.ov-head');
+    if(head){
+      const projId = data.overviewSelected;
+      head.addEventListener('dragover', e=>{
+        if(!dragId) return;
+        if(e.target.closest('[data-ov-qa]')) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+        head.classList.add('ov-drop-root');
+      });
+      head.addEventListener('dragleave', e=>{ if(!head.contains(e.relatedTarget)) head.classList.remove('ov-drop-root'); });
+      head.addEventListener('drop', e=>{
+        e.preventDefault(); head.classList.remove('ov-drop-root');
+        if(!dragId) return;
+        reparentToRoot(dragId, projId);
+      });
+    }
+  }
+  function reparentTask(fromId, toId){
+    if(!fromId || !toId || fromId===toId) return false;
+    if(data.projects.some(p=>p.id===fromId)) return false; // 项目不可被拖入任务
+    const fromNode = getNode(fromId), toNode = getNode(toId);
+    if(!fromNode || !toNode) return false;
+    const toPath = findNodePath(toId) || [];
+    if(toPath.includes(fromId)) return false; // 不能把节点拖到它自己的后代下
+    const pl = getParentList(fromId);
+    if(!pl) return false;
+    const idx = pl.findIndex(x=>x.id===fromId); if(idx<0) return false;
+    const [moved] = pl.splice(idx, 1); // 连同其下所有子任务一并移走
+    toNode.tasks = toNode.tasks || [];
+    toNode.tasks.push(moved);
+    toNode.expanded = true; // 展开目标，便于看到刚移入的子树
+    saveData(); render(); renderOverview();
+    showToast('已将「'+(moved.name||'任务')+'」移动到「'+(toNode.name||'')+'」下');
+    return true;
+  }
+  function reparentToRoot(taskId, projectId){
+    if(!taskId) return false;
+    const node = getNode(taskId);
+    const proj = data.projects.find(p=>p.id===projectId);
+    if(!node || !proj) return false;
+    const pl = getParentList(taskId);
+    if(!pl) return false;
+    const idx = pl.findIndex(x=>x.id===taskId); if(idx<0) return false;
+    const [moved] = pl.splice(idx, 1);
+    proj.tasks = proj.tasks || [];
+    proj.tasks.push(moved);
+    saveData(); render(); renderOverview();
+    showToast('已将「'+(moved.name||'任务')+'」移动到项目顶层');
+    return true;
   }
 
   /* ---------- 甘特拖拽 ---------- */
