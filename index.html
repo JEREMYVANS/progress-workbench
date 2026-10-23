@@ -599,6 +599,11 @@
   .ov-add-task-btn:active{transform:translateY(1px)}
   .ov-add-child{border:none;background:transparent;color:var(--muted);font-size:16px;line-height:1;width:24px;height:24px;border-radius:7px;cursor:pointer;flex:0 0 auto;display:grid;place-items:center;transition:background .12s,color .12s}
   .ov-add-child:hover{background:var(--olive-bg,rgba(94,92,230,.12));color:var(--olive)}
+  .ov-filter{display:flex;align-items:center;gap:6px;margin-top:12px;flex-wrap:wrap}
+  .ov-filter-label{font-size:12px;color:var(--muted);margin-right:2px}
+  .ov-pf{border:0.5px solid var(--line-strong);background:var(--panel);color:var(--muted);font-size:12.5px;font-weight:600;padding:5px 13px;border-radius:8px;cursor:pointer;transition:all .12s}
+  .ov-pf:hover{color:var(--text);border-color:var(--olive)}
+  .ov-pf.active{background:var(--olive);color:#fff;border-color:var(--olive)}
   .ov-quickadd{display:flex;align-items:center;gap:8px;margin:6px 0 6px 0;padding:6px 8px;background:var(--panel2);border:0.5px solid var(--line);border-radius:10px}
   .ov-quickadd input{flex:1;min-width:0;height:34px;padding:0 10px;border:0.5px solid var(--line);border-radius:8px;font-size:13px;outline:none;background:var(--panel);color:var(--text)}
   .ov-quickadd input:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
@@ -1730,6 +1735,19 @@ create policy "ppm own row" on ppm_workbench
     showToast(`已设为 ${newPriority}`);
   }
 
+  function rollupTaskDates(node){
+    (node.tasks||[]).forEach(rollupTaskDates);
+    if(node.tasks && node.tasks.length){
+      let minS=null, maxE=null;
+      node.tasks.forEach(c=>{
+        const s=parseISO(c.start), e=parseISO(c.end);
+        if(s && (minS===null||s<minS)) minS=s;
+        if(e && (maxE===null||e>maxE)) maxE=e;
+      });
+      if(minS) node.start=toISO(minS);
+      if(maxE) node.end=toISO(maxE);
+    }
+  }
   function rollOverdueToToday(){
     let count=0;
     data.projects.forEach(p=>{
@@ -1739,7 +1757,8 @@ create policy "ppm own row" on ppm_workbench
         if(!t.completed && end && end<todayDate){ t.end=todayISO; count++; }
       });
     });
-    if(count>0){ saveData(); render(); showToast(`已将 ${count} 个逾期任务截止时间调整为今天`); }
+    data.projects.forEach(rollupTaskDates); // 上层日期随子任务同步（避免父任务仍显逾期）
+    if(count>0){ saveData(); render(); showToast(`已将 ${count} 个逾期子任务调整为今天，并同步更新上级日期`); }
     else { showToast('当前没有逾期任务'); }
   }
 
@@ -2401,6 +2420,12 @@ create policy "ppm own row" on ppm_workbench
       return data.projects.indexOf(a)-data.projects.indexOf(b);
     });
   }
+  function ovPriorityFilter(){ return data.overviewPriorityFilter || 'all'; }
+  function ovTaskMatchesPriority(t, filt){
+    if(!filt || filt==='all') return true;
+    if((t.priority||'P1')===filt) return true;
+    return (t.tasks||[]).some(c=>ovTaskMatchesPriority(c, filt)); // 保留通往命中项的祖先路径
+  }
   function renderOverview(){
     if(!els.overviewSide || !els.overviewMain) return;
     const order = ovOrderList();
@@ -2431,27 +2456,32 @@ create policy "ppm own row" on ppm_workbench
     const openTasks = tasks.filter(t=>!t.completed);
     const doneTasks = tasks.filter(t=>t.completed);
     const doneOpen = data.overviewDoneOpen===true;
-    const treeHTML = openTasks.map(t=>ovTaskHTML(t,0)).join('');
-    const doneHTML = doneTasks.length ? `<div class="ov-done-group"><button type="button" class="ov-done-head${doneOpen?' open':''}" data-ov-done-toggle aria-label="${doneOpen?'收起':'展开'}已完成任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>已完成</span><span class="count">${doneTasks.length}</span></button>${doneOpen? doneTasks.map(t=>ovTaskHTML(t,0)).join('') : ''}</div>` : '';
+    const pf = ovPriorityFilter();
+    const treeHTML = openTasks.filter(t=>ovTaskMatchesPriority(t, pf)).map(t=>ovTaskHTML(t,0)).join('');
+    const doneVis = doneTasks.filter(t=>ovTaskMatchesPriority(t, pf));
+    const doneHTML = doneVis.length ? `<div class="ov-done-group"><button type="button" class="ov-done-head${doneOpen?' open':''}" data-ov-done-toggle aria-label="${doneOpen?'收起':'展开'}已完成任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>已完成</span><span class="count">${doneVis.length}</span></button>${doneOpen? doneVis.map(t=>ovTaskHTML(t,0)).join('') : ''}</div>` : '';
     const bodyHTML = (tasks.length) ? treeHTML + doneHTML : '<div class="empty-state" style="padding:26px 10px"><p>该项目暂无任务，打开项目详情添加子任务。</p></div>';
     const rootQA = (ovQuickAdd.open && ovQuickAdd.targetId===null) ? ovQuickAddHTML() : '';
     return `<div class="ov-head">
       <div class="ov-head-top"><h2 id="ovTitle" class="ov-title-click" data-ov-title="${p.id}" title="点击查看项目详情">${escapeHTML(p.name)}</h2><span class="priority-badge" style="background:${PRIORITY_COLOR[p.priority]||PRIORITY_COLOR.P1}">${p.priority||'P1'}</span><span class="type-badge" style="background:${PROJECT_TYPE_COLOR[p.type]||'var(--olive)'}">${escapeHTML(p.type||'项目')}</span>${isArchived(p)?'<span class="priority-badge" style="background:var(--muted)">已归档</span>':''}<button type="button" class="ov-add-task-btn" data-ov-add-root>＋ 新增任务</button></div>
       <div class="ov-head-meta"><div class="ov-progress" style="--bar-color:${color}"><span style="width:${pct}%"></span></div><span class="ov-pct-big">${pct}%</span><span>截止 ${formatDateSlash(p.end)}</span></div>
     </div>
+    <div class="ov-filter" role="group" aria-label="优先级筛选"><span class="ov-filter-label">显示</span>${['all','P0','P1'].map(f=>`<button type="button" class="ov-pf${ovPriorityFilter()===f?' active':''}" data-ov-pf="${f}">${f==='all'?'全部':f}</button>`).join('')}</div>
     <div class="ov-tree">${ rootQA + bodyHTML }</div>`;
   }
   function ovTaskHTML(t, depth){
     const kids = t.tasks||[];
-    const hasKids = kids.length>0;
+    const pf = ovPriorityFilter();
+    const visKids = kids.filter(k=>ovTaskMatchesPriority(k, pf));
+    const hasKids = visKids.length>0;
     const expanded = t.expanded!==false;
     const pct = Math.round(calcProgress(t)*100);
     const overdue = !t.completed && t.end && parseISO(t.end) < todayDate;
     const childBtn = `<button type="button" class="ov-add-child" data-ov-add-child="${t.id}" aria-label="添加子任务" title="添加子任务">＋</button>`;
-    let html = `<div class="ov-task${t.completed?' done':''}${overdue?' overdue':''}" data-ov-task="${t.id}" draggable="true" style="--indent:${depth*22}px"><div class="ov-task-main">${hasKids?`<button type="button" class="ov-twist${expanded?' open':''}" data-ov-twist="${t.id}" aria-label="${expanded?'收起':'展开'}子任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`:'<span class="ov-twist-spacer"></span>'}<input type="checkbox" class="ov-check" data-ov-check="${t.id}" ${t.completed?'checked':''} aria-label="完成 ${escapeHTML(t.name)}"><span class="type-badge" style="background:${typeColor(t.type)}">${escapeHTML(t.type||'设计')}</span><span class="ov-task-name" title="点击查看详情">${escapeHTML(t.name)}</span>${childBtn}${overdue?'<span class="priority-badge" style="background:var(--p0)">逾期</span>':''}<span class="ov-task-due">截止 ${formatDateSlash(t.end)}</span>${hasKids?`<span class="ov-task-pct">${pct}%</span>`:''}</div></div>`;
+    let html = `<div class="ov-task${t.completed?' done':''}${overdue?' overdue':''}" data-ov-task="${t.id}" draggable="true" style="--indent:${depth*22}px"><div class="ov-task-main">${hasKids?`<button type="button" class="ov-twist${expanded?' open':''}" data-ov-twist="${t.id}" aria-label="${expanded?'收起':'展开'}子任务"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`:'<span class="ov-twist-spacer"></span>'}<input type="checkbox" class="ov-check" data-ov-check="${t.id}" ${t.completed?'checked':''} aria-label="完成 ${escapeHTML(t.name)}"><span class="priority-badge" style="background:${PRIORITY_COLOR[t.priority]||PRIORITY_COLOR.P1}">${t.priority||'P1'}</span><span class="type-badge" style="background:${typeColor(t.type)}">${escapeHTML(t.type||'设计')}</span><span class="ov-task-name" title="点击查看详情">${escapeHTML(t.name)}</span>${childBtn}${overdue?'<span class="priority-badge" style="background:var(--p0)">逾期</span>':''}<span class="ov-task-due">截止 ${formatDateSlash(t.end)}</span>${hasKids?`<span class="ov-task-pct">${pct}%</span>`:''}</div></div>`;
     if(hasKids && expanded){
-      const open = kids.filter(k=>!k.completed);
-      const done = kids.filter(k=>k.completed);
+      const open = visKids.filter(k=>!k.completed);
+      const done = visKids.filter(k=>k.completed);
       html += open.map(k=>ovTaskHTML(k, depth+1)).join('') + done.map(k=>ovTaskHTML(k, depth+1)).join('');
     }
     if(ovQuickAdd.open && ovQuickAdd.targetId===t.id) html += ovQuickAddHTML();
@@ -2500,6 +2530,10 @@ create policy "ppm own row" on ppm_workbench
       if(e.target.closest('.ov-twist') || e.target.matches('input[type=checkbox]')) return;
       if(e.target.closest('[data-ov-qa]')) return; // 快捷添加框内（输入框/下拉/添加按钮）的点击不触发详情
       openDetail(row.dataset.ovTask);
+    }));
+    els.overviewMain.querySelectorAll('[data-ov-pf]').forEach(b=>b.addEventListener('click', ()=>{
+      data.overviewPriorityFilter = b.dataset.ovPf;
+      saveData(); renderOverview();
     }));
     bindOverviewTaskDrag();
   }
