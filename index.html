@@ -339,10 +339,10 @@
   .task-filter-select:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.12)}
 
   /* ── Modal ── */
-  .modal-overlay{position:fixed;inset:0;z-index:130;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.40);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  .modal-overlay{position:fixed;inset:0;z-index:130;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.40);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);overflow-y:auto}
   html[data-theme="dark"] .modal-overlay{background:rgba(0,0,0,.55)}
   .modal-overlay.active{display:flex}
-  .modal{width:min(720px,100%);max-height:min(92dvh,940px);overflow:auto;padding:24px;border:0.5px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:0 20px 60px rgba(0,0,0,.20);animation:modalIn .2s cubic-bezier(.2,.7,.2,1) both;scrollbar-color:rgba(60,60,67,.25) transparent;scrollbar-width:thin}
+  .modal{width:min(720px,100%);max-height:min(92vh,940px);max-height:min(92dvh,940px);overflow:auto;margin:auto;padding:24px;border:0.5px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:0 20px 60px rgba(0,0,0,.20);animation:modalIn .2s cubic-bezier(.2,.7,.2,1) both;scrollbar-color:rgba(60,60,67,.25) transparent;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
   @keyframes modalIn{from{opacity:0;transform:translateY(8px) scale(.988)}to{opacity:1;transform:none}}
   .modal-head{position:relative;display:flex;align-items:center;justify-content:center;min-height:40px;margin-bottom:16px}
   .modal-head h3{font-size:20px;line-height:1.2;letter-spacing:-.03em;font-weight:700}
@@ -632,7 +632,8 @@
   .todo-picker-pane{display:flex;flex-direction:column;gap:10px}
   .todo-picker-search .todo-picker-input{height:36px;width:100%;padding:0 12px;border:0.5px solid var(--line-strong);border-radius:10px;background:var(--panel);color:var(--text);font-size:13px;outline:none}
   .todo-picker-search .todo-picker-input:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
-  .todo-picker-tree{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px}
+  .todo-picker-tree{max-height:56vh;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;-webkit-overflow-scrolling:touch}
+  .todo-picker-tree>*{flex:0 0 auto} /* 禁止子项被压缩，保证内容溢出时滚动 */
   .tp-project{border:0.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
   .tp-project-head{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--panel2);font-weight:700;font-size:13.5px}
   .tp-dot{width:9px;height:9px;border-radius:50%;flex:none}
@@ -2553,7 +2554,8 @@ create policy "ppm own row" on ppm_workbench
     return (t.tasks||[]).some(c=>ovTaskMatchesPriority(c, filt)); // 保留通往命中项的祖先路径
   }
   /* ---------- 今日待办 ---------- */
-  let todoDragSourceSec = null; // 拖拽源板块，限制仅在同板块内排序
+  let todoDragSourceSec = null; // 拖拽源板块
+  let todoDragId = null;        // 被拖拽项的 id
   let todoPickerSec = null;     // 选择任务弹窗的目标板块（上午 / 下午）
   function taskPathLabel(id){
     const proj = findProjectOf(id); if(!proj) return '';
@@ -2628,12 +2630,14 @@ create policy "ppm own row" on ppm_workbench
     if(tree) tree.innerHTML = html || '<div class="todo-search-empty">无匹配任务</div>';
   }
   function tpTaskHTML(t, existingRefs, depth, q){
+    if(t.completed) return ''; // 仅显示未完成任务
     const kids = (t.tasks||[]);
     const checked = existingRefs.has(t.id);
     const childHTML = kids.map(k=>tpTaskHTML(k, existingRefs, depth+1, q)).join('');
     const selfMatch = q ? ((t.name||'').toLowerCase().includes(q)) : true;
     if(q && !selfMatch && !childHTML) return '';
-    let h = `<div class="tp-task"><label class="tp-task-row"><input type="checkbox" class="tp-check" data-tp-ref="${t.id}" ${checked?'checked':''}><span class="tp-task-name">${escapeHTML(t.name||'')}</span>${kids.length?`<span class="tp-badge">${kids.length}</span>`:''}</label>`;
+    const uncompletedKids = kids.filter(k=>!k.completed).length; // 徽标显示未完成子任务数
+    let h = `<div class="tp-task"><label class="tp-task-row"><input type="checkbox" class="tp-check" data-tp-ref="${t.id}" ${checked?'checked':''}><span class="tp-task-name">${escapeHTML(t.name||'')}</span>${uncompletedKids?`<span class="tp-badge">${uncompletedKids}</span>`:''}</label>`;
     if(childHTML) h += `<div class="tp-kids">${childHTML}</div>`;
     h += `</div>`;
     return h;
@@ -2738,26 +2742,38 @@ create policy "ppm own row" on ppm_workbench
     const lists = els.todoBoard.querySelectorAll('.todo-list');
     lists.forEach(list=>{
       const sec = list.dataset.todoList;
+      // dragover / drop 绑定在列表容器上，才能可靠识别「拖入的目标板块」（含跨上午/下午）
+      list.addEventListener('dragover', e=>{
+        e.preventDefault();
+        const dragging = els.todoBoard.querySelector('.todo-item.dragging');
+        if(!dragging) return;
+        const after = getDragAfterElementTodo(list, e.clientY);
+        if(after==null) list.appendChild(dragging); else list.insertBefore(dragging, after);
+        list.querySelectorAll('.todo-item').forEach(x=>x.classList.toggle('drag-over', x===after));
+      });
+      list.addEventListener('drop', e=>{
+        e.preventDefault();
+        const targetSec = sec;
+        const sourceSec = todoDragSourceSec;
+        const draggedId = todoDragId;
+        // 跨板块拖拽：先从源板块取出被拖项对象（务必在移除前捕获），再从源板块移除
+        let draggedObj = null;
+        if(sourceSec && sourceSec !== targetSec){
+          const srcMap = {}; (data.todo[sourceSec]||[]).forEach(i=>srcMap[i.id]=i);
+          draggedObj = srcMap[draggedId];
+          data.todo[sourceSec] = (data.todo[sourceSec]||[]).filter(i=>i.id !== draggedId);
+        }
+        // 按目标列表当前 DOM 顺序重建目标板块数组（含被拖入的项）
+        const targetIds = [...list.querySelectorAll('.todo-item')].map(x=>x.dataset.todoId);
+        const targetMap = {}; (data.todo[targetSec]||[]).forEach(i=>targetMap[i.id]=i);
+        if(draggedObj) targetMap[draggedId] = draggedObj;
+        data.todo[targetSec] = targetIds.map(id=>targetMap[id]).filter(Boolean);
+        saveData(); render();
+      });
+      // 仅 dragstart / dragend 需要逐项绑定（标记拖拽源与状态）
       list.querySelectorAll('.todo-item[draggable="true"]').forEach(item=>{
-        item.addEventListener('dragstart', e=>{ item.classList.add('dragging'); todoDragSourceSec = sec; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', item.dataset.todoId); });
-        item.addEventListener('dragend', ()=>{ item.classList.remove('dragging'); todoDragSourceSec = null; list.querySelectorAll('.todo-item').forEach(x=>x.classList.remove('drag-over')); });
-        item.addEventListener('dragover', e=>{
-          if(list.dataset.todoList !== todoDragSourceSec) return; // 仅允许同板块内排序，禁止跨上午/下午拖动
-          e.preventDefault();
-          const dragging = list.querySelector('.todo-item.dragging');
-          if(!dragging || dragging===item) return;
-          const after = getDragAfterElementTodo(list, e.clientY);
-          if(after==null) list.appendChild(dragging); else list.insertBefore(dragging, after);
-          list.querySelectorAll('.todo-item').forEach(x=>x.classList.toggle('drag-over', x===after));
-        });
-        item.addEventListener('drop', e=>{
-          if(list.dataset.todoList !== todoDragSourceSec) return; // 跨板块丢弃，忽略
-          e.preventDefault();
-          const ids = [...list.querySelectorAll('.todo-item')].map(x=>x.dataset.todoId);
-          const arr = data.todo[sec]||[]; const map = {}; arr.forEach(i=>map[i.id]=i);
-          data.todo[sec] = ids.map(id=>map[id]).filter(Boolean);
-          saveData(); render();
-        });
+        item.addEventListener('dragstart', e=>{ item.classList.add('dragging'); todoDragSourceSec = item.closest('.todo-list').dataset.todoList; todoDragId = item.dataset.todoId; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', item.dataset.todoId); });
+        item.addEventListener('dragend', ()=>{ item.classList.remove('dragging'); todoDragSourceSec = null; todoDragId = null; els.todoBoard.querySelectorAll('.todo-item').forEach(x=>x.classList.remove('drag-over')); });
       });
     });
   }
