@@ -38,6 +38,7 @@
     --shadow-strong:0 12px 32px rgba(0,0,0,.50), 0 2px 4px rgba(0,0,0,.30);
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;transition:var(--transition)}
+  [hidden]{display:none!important}
   /* Avoid transition on transform/opacity animations inside the gantt bar */
   .gantt-bar,.gantt-bar *,.resize-handle,.edge-marker,.complete-fx,.complete-fx *{transition-property:box-shadow,filter,scale,background-color,border-color,color,fill,stroke}
   body{min-height:100dvh;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased;color:var(--text);background:radial-gradient(ellipse at 12% -10%,rgba(94,92,230,.14),transparent 45%),radial-gradient(ellipse at 88% 6%,rgba(10,132,255,.10),transparent 40%),linear-gradient(180deg,var(--bg),var(--bg2));padding-bottom:40px;overflow-x:hidden;transition:var(--transition)}
@@ -623,6 +624,32 @@
   .todo-result-dot{flex:none;width:9px;height:9px;border-radius:50%}
   .todo-result-name{font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .todo-result-path{font-size:11px;color:var(--muted);max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* ---------- 今日待办 · 选择任务弹窗 ---------- */
+  .todo-picker{display:flex;flex-direction:column;gap:14px}
+  .todo-picker-tabs{display:flex;gap:6px}
+  .todo-picker-tab{border:0.5px solid var(--line-strong);background:var(--panel2);color:var(--muted);font-size:13px;font-weight:600;padding:7px 14px;border-radius:9px;cursor:pointer;transition:all .12s}
+  .todo-picker-tab.active{background:var(--olive);color:#fff;border-color:var(--olive)}
+  .todo-picker-pane{display:flex;flex-direction:column;gap:10px}
+  .todo-picker-search .todo-picker-input{height:36px;width:100%;padding:0 12px;border:0.5px solid var(--line-strong);border-radius:10px;background:var(--panel);color:var(--text);font-size:13px;outline:none}
+  .todo-picker-search .todo-picker-input:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
+  .todo-picker-tree{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px}
+  .tp-project{border:0.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+  .tp-project-head{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--panel2);font-weight:700;font-size:13.5px}
+  .tp-dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .tp-project-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tp-project-pct{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .tp-tasks{padding:6px 8px 8px}
+  .tp-task{margin:1px 0}
+  .tp-task-row{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer;font-size:13.5px;color:var(--text);transition:background .12s}
+  .tp-task-row:hover{background:var(--panel2)}
+  .tp-check{flex:none;width:17px;height:17px;cursor:pointer;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
+  .tp-check:checked{background:var(--success);border-color:var(--success)}
+  .tp-check:checked::after{content:"";width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translateY(-1px)}
+  .tp-task-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tp-badge{flex:none;font-size:10.5px;font-weight:700;color:var(--muted);background:var(--panel);border:0.5px solid var(--line);border-radius:999px;padding:1px 7px}
+  .tp-kids{margin-left:16px;border-left:1px dashed var(--line);padding-left:6px}
+  .todo-picker-foot{display:flex;align-items:center;justify-content:space-between;padding-top:8px;border-top:0.5px solid var(--line)}
+  .todo-picker-count{font-size:12.5px;color:var(--muted)}
   /* ---------- 项目总览 ---------- */
   .overview-layout{display:grid;grid-template-columns:252px minmax(0,1fr);gap:18px;align-items:start}
   .overview-side{background:var(--panel);border:0.5px solid var(--line);border-radius:16px;padding:10px;position:sticky;top:78px;max-height:calc(100vh - 100px);overflow:auto;box-shadow:0 1px 3px rgba(0,0,0,.04)}
@@ -782,6 +809,28 @@
 <div class="modal-overlay" id="archivedModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="archivedTitle">
   <div class="modal-head"><div class="modal-title-wrap"><h3 id="archivedTitle">已归档项目</h3><div class="breadcrumb">完成全部任务的时间（即归档时间）</div></div><button class="close" type="button" data-close="archivedModal" aria-label="关闭">×</button></div>
   <div id="archivedBody"></div>
+</div></div>
+
+<!-- 今日待办 · 选择任务弹窗（项目总览，勾选加入） -->
+<div class="modal-overlay" id="todoPickerModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="todoPickerTitle" style="max-width:640px">
+  <div class="modal-head"><div class="modal-title-wrap"><h3 id="todoPickerTitle">选择任务加入今日待办</h3><div class="breadcrumb" id="todoPickerSecLabel"></div></div><button class="close" type="button" data-close="todoPickerModal" aria-label="关闭">×</button></div>
+  <div class="todo-picker">
+    <div class="todo-picker-tabs">
+      <button type="button" class="todo-picker-tab active" data-tp-tab="tree">选择现有任务</button>
+      <button type="button" class="todo-picker-tab" data-tp-tab="custom">自定义</button>
+    </div>
+    <div class="todo-picker-pane" data-tp-pane="tree">
+      <div class="todo-picker-search"><input type="text" class="todo-picker-input" data-tp-search placeholder="搜索任务 / 项目…"></div>
+      <div class="todo-picker-tree" data-tp-tree></div>
+    </div>
+    <div class="todo-picker-pane" data-tp-pane="custom" hidden="">
+      <div class="todo-custom-input-wrap">
+        <input type="text" class="todo-custom-input" data-tp-custom placeholder="输入待办内容，回车添加">
+        <button type="button" class="btn small todo-custom-add" data-tp-custom-add>添加</button>
+      </div>
+    </div>
+    <div class="todo-picker-foot"><span class="todo-picker-count" data-tp-count></span><button type="button" class="btn primary" data-close="todoPickerModal">完成</button></div>
+  </div>
 </div></div>
 
 <!-- 确认弹窗 -->
@@ -1023,6 +1072,7 @@ create policy "ppm own row" on ppm_workbench
     completedCalendar:$('completedCalendar'), completedCalendarGrid:$('completedCalendarGrid'), calMonthLabel:$('calMonthLabel'),
     overviewBoard:$('overviewBoard'), overviewSide:$('overviewSide'), overviewMain:$('overviewMain'),
     todoBoard:$('todoBoard'), todoBody:$('todoBody'), todoImportBtn:$('todoImportBtn'),
+    todoPickerModal:$('todoPickerModal'),
     taskList:$('taskList'), toast:$('toast'), detailModal:$('detailModal'), detailBody:$('detailBody'),
     detailBreadcrumb:$('detailBreadcrumb'), detailBack:$('detailBack'), confirmModal:$('confirmModal'),
     projectListModal:$('projectListModal'), projectListBody:$('projectListBody'),
@@ -2503,7 +2553,8 @@ create policy "ppm own row" on ppm_workbench
     return (t.tasks||[]).some(c=>ovTaskMatchesPriority(c, filt)); // 保留通往命中项的祖先路径
   }
   /* ---------- 今日待办 ---------- */
-  let todoComposerState = { openSection: null, mode: 'task' }; // 添加器状态：当前展开板块 / 当前模式
+  let todoDragSourceSec = null; // 拖拽源板块，限制仅在同板块内排序
+  let todoPickerSec = null;     // 选择任务弹窗的目标板块（上午 / 下午）
   function taskPathLabel(id){
     const proj = findProjectOf(id); if(!proj) return '';
     const names = findNodePath(id).map(x => { const n = (x===proj.id) ? proj : getNode(x, [proj]); return n ? n.name : ''; }).slice(0, -1);
@@ -2522,8 +2573,6 @@ create policy "ppm own row" on ppm_workbench
     const label = sec==='morning' ? '上午' : '下午';
     const icon = sec==='morning' ? '🌅' : '🌇';
     const items = (data.todo[sec]||[]).map(it => todoItemHTML(it, sec)).join('');
-    const open = todoComposerState.openSection === sec;
-    const mode = todoComposerState.mode || 'task';
     const count = (data.todo[sec]||[]).length;
     return `<div class="todo-section" data-section="${sec}">
       <div class="todo-section-head">
@@ -2531,7 +2580,6 @@ create policy "ppm own row" on ppm_workbench
         <button type="button" class="todo-add-btn" data-todo-add="${sec}">＋ 添加</button>
       </div>
       <div class="todo-list" data-todo-list="${sec}">${items || '<div class="todo-empty">暂无待办，点「＋ 添加」开始规划</div>'}</div>
-      ${open ? todoComposerHTML(sec, mode) : ''}
     </div>`;
   }
   function todoItemHTML(it, sec){
@@ -2549,77 +2597,96 @@ create policy "ppm own row" on ppm_workbench
       <button type="button" class="todo-del" data-todo-del="${it.id}" title="删除" aria-label="删除">×</button>
     </div>`;
   }
-  function todoComposerHTML(sec, mode){
-    return `<div class="todo-composer" data-todo-composer="${sec}">
-      <div class="todo-composer-tabs">
-        <button type="button" class="todo-tab${mode==='task'?' active':''}" data-todo-mode="task">选择现有任务</button>
-        <button type="button" class="todo-tab${mode==='custom'?' active':''}" data-todo-mode="custom">自定义</button>
-      </div>
-      <div class="todo-composer-pane todo-pane-task" ${mode==='custom'?'hidden':''}>
-        <input type="text" class="todo-search" data-todo-search placeholder="搜索项目库中的任务…">
-        <div class="todo-search-results" data-todo-results></div>
-      </div>
-      <div class="todo-composer-pane todo-pane-custom" ${mode==='task'?'hidden':''}>
-        <div class="todo-custom-input-wrap">
-          <input type="text" class="todo-custom-input" data-todo-custom placeholder="输入待办内容，回车添加">
-          <button type="button" class="btn small todo-custom-add" data-todo-custom-add="${sec}">添加</button>
-        </div>
-      </div>
-    </div>`;
+  /* 选择任务弹窗：弹出项目总览，勾选的任务加入目标板块 */
+  function openTodoPicker(sec){
+    todoPickerSec = sec;
+    const label = sec==='morning' ? '上午' : '下午';
+    const lbl = els.todoPickerModal.querySelector('#todoPickerSecLabel'); if(lbl) lbl.textContent = '加入「' + label + '」板块';
+    setTodoPickerTab('tree');
+    const search = els.todoPickerModal.querySelector('[data-tp-search]'); if(search) search.value='';
+    renderTodoPickerTree(sec, '');
+    updateTodoPickerCount();
+    openModal(els.todoPickerModal);
+    if(search) setTimeout(()=>search.focus(), 50);
+  }
+  function setTodoPickerTab(tab){
+    els.todoPickerModal.querySelectorAll('[data-tp-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tpTab===tab));
+    els.todoPickerModal.querySelectorAll('[data-tp-pane]').forEach(p=>{ p.hidden = (p.dataset.tpPane!==tab); });
+  }
+  function renderTodoPickerTree(sec, query){
+    const existingRefs = new Set((data.todo[sec]||[]).filter(i=>i.kind==='task').map(i=>i.refId));
+    const q = (query||'').trim().toLowerCase();
+    const projects = data.projects.filter(p=>!isArchived(p));
+    let html='';
+    if(!projects.length){ html = '<div class="todo-search-empty">还没有项目，先去甘特图新建项目与任务</div>'; }
+    projects.forEach(p=>{
+      const projTasks = (p.tasks||[]).map(t=>tpTaskHTML(t, existingRefs, 1, q)).join('');
+      if(q && !projTasks && !((p.name||'').toLowerCase().includes(q))) return;
+      html += `<div class="tp-project"><div class="tp-project-head"><span class="tp-dot" style="background:${p.color||'#8e8e93'}"></span><span class="tp-project-name">${escapeHTML(p.name)}</span><span class="tp-project-pct">${Math.round(calcProgress(p)*100)}%</span></div><div class="tp-tasks">${projTasks}</div></div>`;
+    });
+    const tree = els.todoPickerModal.querySelector('[data-tp-tree]');
+    if(tree) tree.innerHTML = html || '<div class="todo-search-empty">无匹配任务</div>';
+  }
+  function tpTaskHTML(t, existingRefs, depth, q){
+    const kids = (t.tasks||[]);
+    const checked = existingRefs.has(t.id);
+    const childHTML = kids.map(k=>tpTaskHTML(k, existingRefs, depth+1, q)).join('');
+    const selfMatch = q ? ((t.name||'').toLowerCase().includes(q)) : true;
+    if(q && !selfMatch && !childHTML) return '';
+    let h = `<div class="tp-task"><label class="tp-task-row"><input type="checkbox" class="tp-check" data-tp-ref="${t.id}" ${checked?'checked':''}><span class="tp-task-name">${escapeHTML(t.name||'')}</span>${kids.length?`<span class="tp-badge">${kids.length}</span>`:''}</label>`;
+    if(childHTML) h += `<div class="tp-kids">${childHTML}</div>`;
+    h += `</div>`;
+    return h;
+  }
+  function togglePickerItem(sec, refId, checked){
+    if(!data.todo) data.todo = {morning:[], afternoon:[]};
+    if(!data.todo[sec]) data.todo[sec] = [];
+    const arr = data.todo[sec];
+    if(checked){
+      if(!arr.some(i=>i.kind==='task' && i.refId===refId)) arr.push({ id: uid(), kind:'task', refId });
+    } else {
+      for(let i=arr.length-1;i>=0;i--){ if(arr[i].kind==='task' && arr[i].refId===refId) arr.splice(i,1); }
+    }
+    saveData();
+    updateTodoPickerCount();
+  }
+  function updateTodoPickerCount(){
+    const el = els.todoPickerModal.querySelector('[data-tp-count]');
+    if(!el) return;
+    const n = todoPickerSec ? (data.todo[todoPickerSec]||[]).length : 0;
+    el.textContent = '本板块已选 ' + n + ' 项';
+  }
+  function bindTodoPicker(){
+    const m = els.todoPickerModal; if(!m || m.dataset.bound) return; m.dataset.bound='1';
+    m.querySelectorAll('[data-tp-tab]').forEach(b=>b.addEventListener('click', ()=>setTodoPickerTab(b.dataset.tpTab)));
+    const tree = m.querySelector('[data-tp-tree]');
+    if(tree) tree.addEventListener('change', e=>{
+      const cb = e.target.closest('[data-tp-ref]'); if(!cb || !todoPickerSec) return;
+      togglePickerItem(todoPickerSec, cb.dataset.tpRef, cb.checked);
+    });
+    const search = m.querySelector('[data-tp-search]');
+    if(search) search.addEventListener('input', ()=>{ if(todoPickerSec) renderTodoPickerTree(todoPickerSec, search.value); });
+    const customInp = m.querySelector('[data-tp-custom]');
+    if(customInp) customInp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); commitCustomFromPicker(); } });
+    const customAdd = m.querySelector('[data-tp-custom-add]');
+    if(customAdd) customAdd.addEventListener('click', commitCustomFromPicker);
+  }
+  function commitCustomFromPicker(){
+    const m = els.todoPickerModal; const inp = m.querySelector('[data-tp-custom]');
+    const text = inp ? inp.value.trim() : ''; if(!text || !todoPickerSec) return;
+    if(!data.todo[todoPickerSec]) data.todo[todoPickerSec] = [];
+    data.todo[todoPickerSec].push({ id: uid(), kind:'custom', text, done:false });
+    saveData(); updateTodoPickerCount();
+    inp.value=''; inp.focus(); showToast('已添加到今日待办');
   }
   function bindTodo(){
     if(!els.todoBoard) return;
     if(els.todoImportBtn && !els.todoImportBtn.dataset.bound){ els.todoImportBtn.dataset.bound='1'; els.todoImportBtn.addEventListener('click', ()=>importYesterdayUnfinished()); }
-    els.todoBoard.querySelectorAll('[data-todo-add]').forEach(b=>b.addEventListener('click', ()=>{
-      const sec = b.dataset.todoAdd;
-      todoComposerState.openSection = (todoComposerState.openSection===sec) ? null : sec;
-      renderTodo();
-      if(todoComposerState.openSection){ const inp = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] .todo-search`); if(inp) inp.focus(); }
-    }));
-    els.todoBoard.querySelectorAll('[data-todo-mode]').forEach(b=>b.addEventListener('click', ()=>{
-      todoComposerState.mode = b.dataset.todoMode;
-      const sec = todoComposerState.openSection;
-      renderTodo();
-      if(sec){ const inp = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] .${todoComposerState.mode==='task'?'todo-search':'todo-custom-input'}`); if(inp) inp.focus(); }
-    }));
-    els.todoBoard.querySelectorAll('[data-todo-search]').forEach(inp=>inp.addEventListener('input', ()=>{
-      const sec = inp.closest('[data-todo-composer]').dataset.todoComposer;
-      renderTodoSearchResults(sec, inp.value);
-    }));
-    els.todoBoard.querySelectorAll('[data-todo-results]').forEach(c=>c.addEventListener('click', e=>{
-      const r = e.target.closest('[data-todo-result]'); if(!r) return;
-      const sec = c.closest('[data-todo-composer]').dataset.todoComposer;
-      addTodoItem(sec, { id: uid(), kind:'task', refId: r.dataset.todoResult });
-      renderTodo();
-      if(todoComposerState.openSection){ const inp = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] .todo-search`); if(inp){ inp.focus(); renderTodoSearchResults(sec, ''); } }
-    }));
-    els.todoBoard.querySelectorAll('[data-todo-custom]').forEach(inp=>inp.addEventListener('keydown', e=>{
-      if(e.key==='Enter'){ e.preventDefault(); const sec = inp.closest('[data-todo-composer]').dataset.todoComposer; commitCustom(sec, inp.value); }
-    }));
-    els.todoBoard.querySelectorAll('[data-todo-custom-add]').forEach(b=>b.addEventListener('click', ()=>{
-      const sec = b.dataset.todoCustomAdd;
-      const inp = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] .todo-custom-input`);
-      commitCustom(sec, inp ? inp.value : '');
-    }));
+    els.todoBoard.querySelectorAll('[data-todo-add]').forEach(b=>b.addEventListener('click', ()=>openTodoPicker(b.dataset.todoAdd)));
     els.todoBoard.querySelectorAll('[data-todo-check]').forEach(ch=>ch.addEventListener('change', ()=>toggleTodoItem(ch.dataset.todoCheck)));
     els.todoBoard.querySelectorAll('[data-todo-del]').forEach(b=>b.addEventListener('click', ()=>deleteTodoItem(b.dataset.todoDel)));
+    bindTodoPicker();
     bindTodoDrag();
-  }
-  function renderTodoSearchResults(sec, query){
-    const container = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] [data-todo-results]`);
-    if(!container) return;
-    query = (query||'').trim();
-    const existingRefs = new Set([...(data.todo.morning||[]), ...(data.todo.afternoon||[])].filter(i=>i.kind==='task').map(i=>i.refId));
-    if(!query){ container.innerHTML = '<div class="todo-search-empty">输入关键字搜索项目库任务</div>'; return; }
-    const q = query.toLowerCase();
-    const results = [];
-    data.projects.forEach(p=>{ getAllDeep(p.tasks).forEach(t=>{
-      if(t.tasks && t.tasks.length) return;
-      if(existingRefs.has(t.id)) return;
-      if((t.name||'').toLowerCase().includes(q)){ const proj = findProjectOf(t.id); results.push({ id:t.id, name:t.name, path:taskPathLabel(t.id), color:(proj&&proj.color)||'#8e8e93' }); }
-    }); });
-    if(!results.length){ container.innerHTML = '<div class="todo-search-empty">无匹配任务</div>'; return; }
-    container.innerHTML = results.slice(0,30).map(r=>`<button type="button" class="todo-result" data-todo-result="${r.id}"><span class="todo-result-dot" style="background:${r.color}"></span><span class="todo-result-name">${escapeHTML(r.name)}</span><span class="todo-result-path">${escapeHTML(r.path||'')}</span></button>`).join('');
   }
   function findTodoItem(id){
     for(const sec of ['morning','afternoon']){
@@ -2651,13 +2718,6 @@ create policy "ppm own row" on ppm_workbench
       render();
     } else { it.done = !it.done; saveData(); render(); }
   }
-  function commitCustom(sec, text){
-    text = (text||'').trim(); if(!text) return;
-    addTodoItem(sec, { id: uid(), kind:'custom', text, done:false });
-    renderTodo();
-    const inp = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] .todo-custom-input`);
-    if(inp){ inp.value=''; inp.focus(); }
-  }
   function importYesterdayUnfinished(){
     const y = toISO(addDays(todayDate, -1));
     if(!data.todo) data.todo = {morning:[], afternoon:[]};
@@ -2679,9 +2739,10 @@ create policy "ppm own row" on ppm_workbench
     lists.forEach(list=>{
       const sec = list.dataset.todoList;
       list.querySelectorAll('.todo-item[draggable="true"]').forEach(item=>{
-        item.addEventListener('dragstart', e=>{ item.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', item.dataset.todoId); });
-        item.addEventListener('dragend', ()=>{ item.classList.remove('dragging'); list.querySelectorAll('.todo-item').forEach(x=>x.classList.remove('drag-over')); });
+        item.addEventListener('dragstart', e=>{ item.classList.add('dragging'); todoDragSourceSec = sec; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', item.dataset.todoId); });
+        item.addEventListener('dragend', ()=>{ item.classList.remove('dragging'); todoDragSourceSec = null; list.querySelectorAll('.todo-item').forEach(x=>x.classList.remove('drag-over')); });
         item.addEventListener('dragover', e=>{
+          if(list.dataset.todoList !== todoDragSourceSec) return; // 仅允许同板块内排序，禁止跨上午/下午拖动
           e.preventDefault();
           const dragging = list.querySelector('.todo-item.dragging');
           if(!dragging || dragging===item) return;
@@ -2690,6 +2751,7 @@ create policy "ppm own row" on ppm_workbench
           list.querySelectorAll('.todo-item').forEach(x=>x.classList.toggle('drag-over', x===after));
         });
         item.addEventListener('drop', e=>{
+          if(list.dataset.todoList !== todoDragSourceSec) return; // 跨板块丢弃，忽略
           e.preventDefault();
           const ids = [...list.querySelectorAll('.todo-item')].map(x=>x.dataset.todoId);
           const arr = data.todo[sec]||[]; const map = {}; arr.forEach(i=>map[i.id]=i);
