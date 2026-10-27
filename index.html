@@ -567,6 +567,62 @@
   #bootSplash.hide{opacity:0;pointer-events:none}
   #bootSplash .boot-mark{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#5e5ce6,#30d0c0);color:#fff;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;letter-spacing:.5px;box-shadow:0 8px 24px rgba(94,92,230,.28);animation:bootPulse 1.2s ease-in-out infinite}
   @keyframes bootPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.94);opacity:.75}}
+  /* ---------- 今日待办 ---------- */
+  .todo-board{border:0.5px solid var(--line);border-radius:var(--radius-xl);background:var(--panel);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+  .todo-board-head{padding:14px 22px;border-bottom:0.5px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .todo-board-head h2{font-size:20px;line-height:1.2;letter-spacing:-.03em;font-weight:700}
+  .todo-head-left{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .todo-import{font-size:12.5px;padding:7px 13px}
+  .todo-import:hover{background:rgba(60,60,67,.10);border-color:var(--line-strong)}
+  .todo-body{padding:18px 22px 26px;display:flex;flex-direction:column;gap:18px}
+  .todo-section{border:0.5px solid var(--line);border-radius:var(--radius-lg);background:var(--panel2);overflow:hidden}
+  .todo-section-head{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:0.5px solid var(--line)}
+  .todo-section-title{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700;letter-spacing:-.01em}
+  .todo-section-icon{font-size:15px}
+  .todo-section-title .count{margin-left:2px;font-size:11px;font-weight:600;color:var(--muted);background:var(--panel);border:0.5px solid var(--line);border-radius:999px;padding:1px 8px}
+  .todo-add-btn{border:0.5px solid var(--line-strong);background:var(--panel);color:var(--text);font-size:13px;font-weight:600;padding:6px 13px;border-radius:9px;cursor:pointer;transition:all .12s}
+  .todo-add-btn:hover{background:var(--olive);color:#fff;border-color:var(--olive)}
+  .todo-list{padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:8px}
+  .todo-empty{color:var(--muted);font-size:12.5px;text-align:center;padding:14px 0}
+  .todo-item{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:0.5px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow-sm);transition:background .15s,border-color .15s,box-shadow .15s,transform .15s;position:relative;overflow:hidden}
+  .todo-item:hover{background:#fff;border-color:var(--line-strong);box-shadow:var(--shadow-hover);transform:translateY(-1px)}
+  html[data-theme="dark"] .todo-item:hover{background:rgba(58,58,60,.9);transform:translateY(-1px)}
+  .todo-item.dragging{opacity:.45;background:var(--panel2)}
+  .todo-item.drag-over{box-shadow:0 0 0 2px var(--olive) inset}
+  .todo-drag{flex:none;color:var(--soft);cursor:grab;font-size:14px;line-height:1.4;padding-top:1px;user-select:none}
+  .todo-drag:active{cursor:grabbing}
+  .todo-check{flex:none;width:18px;height:18px;margin-top:1px;cursor:pointer;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
+  .todo-check:checked{background:var(--success);border-color:var(--success)}
+  .todo-check:checked::after{content:"";width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translateY(-1px)}
+  .todo-main{flex:1;min-width:0}
+  .todo-name{font-size:13.5px;font-weight:600;line-height:1.35;color:var(--text);word-break:break-word}
+  .todo-item.done .todo-name{text-decoration:line-through;color:var(--muted)}
+  .todo-sub{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+  .todo-tag{flex:none;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;letter-spacing:.02em}
+  .todo-tag-task{background:rgba(94,92,230,.12);color:var(--olive);border:0.5px solid rgba(94,92,230,.28)}
+  .todo-tag-custom{background:rgba(255,159,10,.14);color:#c77700;border:0.5px solid rgba(255,159,10,.34)}
+  html[data-theme="dark"] .todo-tag-custom{color:#ffb340}
+  .todo-tag-del{background:rgba(255,59,48,.12);color:var(--danger);border:0.5px solid rgba(255,59,48,.3)}
+  .todo-del{flex:none;border:0;background:transparent;color:var(--soft);font-size:17px;line-height:1;cursor:pointer;padding:2px 4px;border-radius:6px;transition:all .12s}
+  .todo-del:hover{background:rgba(255,59,48,.12);color:var(--danger)}
+  .todo-kind-task{border-left:3px solid var(--olive)}
+  .todo-kind-custom{border-left:3px solid transparent;border-style:dashed}
+  .todo-dangling{opacity:.6}
+  .todo-composer{border-top:0.5px solid var(--line);padding:12px 14px;background:var(--panel);display:flex;flex-direction:column;gap:10px}
+  .todo-composer-tabs{display:flex;gap:6px}
+  .todo-tab{border:0.5px solid var(--line-strong);background:var(--panel2);color:var(--muted);font-size:12.5px;font-weight:600;padding:5px 12px;border-radius:8px;cursor:pointer;transition:all .12s}
+  .todo-tab.active{background:var(--olive);color:#fff;border-color:var(--olive)}
+  .todo-composer-pane{display:flex;flex-direction:column;gap:8px}
+  .todo-search,.todo-custom-input{flex:1;height:34px;padding:0 12px;border:0.5px solid var(--line-strong);border-radius:10px;background:var(--panel);color:var(--text);font-size:13px;outline:none;transition:border-color .12s,box-shadow .12s}
+  .todo-search:focus,.todo-custom-input:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
+  .todo-custom-input-wrap{display:flex;gap:8px;align-items:center}
+  .todo-search-results{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}
+  .todo-search-empty{color:var(--muted);font-size:12px;padding:8px 4px}
+  .todo-result{display:flex;align-items:center;gap:8px;padding:8px 10px;border:0.5px solid var(--line);border-radius:9px;background:var(--panel);text-align:left;cursor:pointer;transition:background .12s,border-color .12s}
+  .todo-result:hover{background:var(--panel2);border-color:var(--line-strong)}
+  .todo-result-dot{flex:none;width:9px;height:9px;border-radius:50%}
+  .todo-result-name{font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .todo-result-path{font-size:11px;color:var(--muted);max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* ---------- 项目总览 ---------- */
   .overview-layout{display:grid;grid-template-columns:252px minmax(0,1fr);gap:18px;align-items:start}
   .overview-side{background:var(--panel);border:0.5px solid var(--line);border-radius:16px;padding:10px;position:sticky;top:78px;max-height:calc(100vh - 100px);overflow:auto;box-shadow:0 1px 3px rgba(0,0,0,.04)}
@@ -645,7 +701,7 @@
 </style></head>
 <body class="modal-open">
 <div id="bootSplash" aria-hidden="true"><div class="boot-mark">PD</div></div>
-<header class="topbar"><div class="topbar-inner"><div class="brand"><div class="brand-mark">PD</div><div><h1>Project Dashboard</h1><p>项目进度 · 子任务 · 甘特图</p></div></div><div class="topbar-right"><nav class="nav-bar" id="navBar" aria-label="视图与快捷"><button type="button" class="nav-btn primary" data-view-key="today">今日待处理</button><button type="button" class="nav-btn" data-view-key="gantt">项目甘特图</button><button type="button" class="nav-btn" data-view-key="completed">已完成任务<span class="nav-count">27</span></button><button type="button" class="nav-btn" data-view-key="projects">全部项目<span class="nav-count">9</span></button><button type="button" class="nav-btn" data-view-key="archived">已归档<span class="nav-count">0</span></button></nav><nav class="actions" aria-label="工作台主要操作">
+<header class="topbar"><div class="topbar-inner"><div class="brand"><div class="brand-mark">PD</div><div><h1>Project Dashboard</h1><p>项目进度 · 子任务 · 甘特图</p></div></div><div class="topbar-right"><nav class="nav-bar" id="navBar" aria-label="视图与快捷"><button type="button" class="nav-btn primary" data-view-key="todo">今日待办</button><button type="button" class="nav-btn" data-view-key="today">任务看板</button><button type="button" class="nav-btn" data-view-key="gantt">项目甘特图</button><button type="button" class="nav-btn" data-view-key="overview">项目总览</button><button type="button" class="nav-btn" data-view-key="completed">已完成任务</button><button type="button" class="nav-btn" data-view-key="projects">全部项目</button><button type="button" class="nav-btn" data-view-key="archived">已归档</button></nav><nav class="actions" aria-label="工作台主要操作">
   <button class="btn icon" id="refreshBtn" type="button" aria-label="刷新页面">↻</button>
   <div class="backup-wrap">
     <button class="btn" id="backupBtn" type="button" aria-haspopup="true" aria-expanded="false">备份</button>
@@ -661,7 +717,7 @@
 </div></header>
 
 <main class="page">
-  <div class="main-grid" id="mainGrid" data-view="today">
+  <div class="main-grid" id="mainGrid" data-view="todo">
     <section class="workspace" id="workspace" data-pane="gantt" aria-labelledby="ganttTitle" hidden="">
       <div class="workspace-head"><div class="head-left"><h2 id="ganttTitle">项目甘特图</h2><button class="btn primary" id="createBtn" type="button">新建项目</button></div>
         <div class="controls" aria-label="甘特图视图控制">
@@ -677,8 +733,18 @@
         <div class="overview-main" id="overviewMain"></div>
       </div>
     </section>
-    <section class="today-board" id="todayBoard" data-pane="today" aria-labelledby="todayTitle">
-      <div class="today-board-head"><h2 id="todayTitle">今日待处理</h2><div class="today-head-actions"><button type="button" class="btn small overdue-roll" id="overdueRollBtn" title="将逾期任务截止日期全部调整为今天">逾期归今日</button></div><div class="today-date workday" id="todayDatePill"><span id="weekday">今天 · 周一 · 开工</span><strong id="todayText">8月31日</strong></div></div>
+    <section class="todo-board" id="todoBoard" data-pane="todo" aria-labelledby="todoTitle">
+      <div class="todo-board-head">
+        <div class="todo-head-left">
+          <h2 id="todoTitle">今日待办</h2>
+          <div class="today-date workday" id="todoDatePill"><span id="todoWeekday">今天</span><strong id="todoText"></strong></div>
+        </div>
+        <div class="todo-head-actions"><button type="button" class="btn small todo-import" id="todoImportBtn" title="把昨天（截止日=昨天）且未完成的任务加入上午板块">昨天未完成 → 今天</button></div>
+      </div>
+      <div class="todo-body" id="todoBody"></div>
+    </section>
+    <section class="today-board" id="todayBoard" data-pane="today" aria-labelledby="todayTitle" hidden="">
+      <div class="today-board-head"><h2 id="todayTitle">任务看板</h2><div class="today-head-actions"><button type="button" class="btn small overdue-roll" id="overdueRollBtn" title="将逾期任务截止日期全部调整为今天">逾期归今日</button></div><div class="today-date workday" id="todayDatePill"><span id="weekday">今天 · 周一 · 开工</span><strong id="todayText">8月31日</strong></div></div>
       <div class="today-board-grid" id="todayBoardGrid"><div class="today-col" data-prio="P0"><div class="today-col-head" data-prio="P0"><div class="col-head-left"><span class="col-title">P0 · 高优先级</span><span class="col-count">5</span></div><div class="col-sort" data-prio="P0"><button type="button" data-sort="type" class="">类型</button><button type="button" data-sort="project" class="active">项目</button><button type="button" data-sort="deadline" class="">截止</button><button type="button" data-sort="custom" class="">自定义</button></div></div><div class="today-col-body"><div class="today-task-card grouped" data-task="mt9xgu5h10lo4l" draggable="true" style="--group-color:#7c3aed"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">新增过滤框组件编码</span><input type="checkbox" class="tt-check" aria-label="完成 新增过滤框组件编码"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">20HP风管定制标配滤网 / 新增物料 / 新增过滤框组件</div></div><div class="today-task-card grouped" data-task="mt2jeh0dohwnjx" draggable="true" style="--group-color:#5e5ce6"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">统计机型</span><input type="checkbox" class="tt-check" aria-label="完成 统计机型"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">中静压切换纸箱</div></div><div class="today-task-card grouped" data-task="mt8cns6vnnenxp" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">支架图纸归档</span><input type="checkbox" class="tt-check" aria-label="完成 支架图纸归档"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:var(--blue)">设计</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">左接管切换直流水泵 / 新建支架物料</div></div><div class="today-task-card grouped" data-task="mt2pgcr46eyfcp" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">风机固定板图纸归档</span><input type="checkbox" class="tt-check" aria-label="完成 风机固定板图纸归档"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:var(--blue)">设计</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">左接管切换直流水泵 / 新建风机固定板</div></div><div class="today-task-card grouped" data-task="mtg07qm1yujuwb" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">运输跌落测试</span><input type="checkbox" class="tt-check" aria-label="完成 运输跌落测试"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#d97706">测试</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">左接管切换直流水泵</div></div></div></div><div class="today-col" data-prio="P1"><div class="today-col-head" data-prio="P1"><div class="col-head-left"><span class="col-title">P1 INBOX</span><span class="col-count">14</span></div><div class="col-sort" data-prio="P1"><button type="button" data-sort="type" class="">类型</button><button type="button" data-sort="project" class="active">项目</button><button type="button" data-sort="deadline" class="">截止</button><button type="button" data-sort="custom" class="">自定义</button></div></div><div class="today-col-body"><div class="today-task-card grouped" data-task="msyvrv5aydqi52" draggable="true" style="--group-color:#7c3aed"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">图纸归档</span><input type="checkbox" class="tt-check" aria-label="完成 图纸归档"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">20HP风管定制标配滤网 / 新增物料</div></div><div class="today-task-card grouped" data-task="msyvsh03dv29hh" draggable="true" style="--group-color:#7c3aed"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">打样申请</span><input type="checkbox" class="tt-check" aria-label="完成 打样申请"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#16a34a">装机</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">20HP风管定制标配滤网</div></div><div class="today-task-card grouped" data-task="msxednskkxtnqw" draggable="true" style="--group-color:#4f46e5"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">底盘和泡沫优化</span><input type="checkbox" class="tt-check" aria-label="完成 底盘和泡沫优化"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:var(--blue)">设计</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">新一代天花机 / 三维优化</div></div><div class="today-task-card grouped" data-task="mt2jewrhk4j47d" draggable="true" style="--group-color:#5e5ce6"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">新增物料--纸箱</span><input type="checkbox" class="tt-check" aria-label="完成 新增物料--纸箱"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/11</span></div><div class="tt-path">中静压切换纸箱</div></div><div class="today-task-card grouped" data-task="mszcn50pc5yqxq" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">发邮件-控制水泵固定板组件库存</span><input type="checkbox" class="tt-check" aria-label="完成 发邮件-控制水泵固定板组件库存"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#64748b">杂事</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/1</span></div><div class="tt-path">左接管切换直流水泵 / 新建支架物料</div></div><div class="today-task-card grouped" data-task="mt8co4x478rxik" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">物料确认</span><input type="checkbox" class="tt-check" aria-label="完成 物料确认"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/2</span></div><div class="tt-path">左接管切换直流水泵 / 新建支架物料</div></div><div class="today-task-card grouped" data-task="mszcq9t5xhggjo" draggable="true" style="--group-color:#0e7490"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">成品检测试结果</span><input type="checkbox" class="tt-check" aria-label="完成 成品检测试结果"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#d97706">测试</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/2</span></div><div class="tt-path">左接管切换直流水泵 / 新建风机固定板</div></div><div class="today-task-card grouped" data-task="msyv96rvl66tc0" draggable="true" style="--group-color:#d97706"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">Q3面板投产</span><input type="checkbox" class="tt-check" aria-label="完成 Q3面板投产"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">ME XCT9 TD / Q3Q4面板投产</div></div><div class="today-task-card grouped" data-task="msyv9kv4yzuys1" draggable="true" style="--group-color:#d97706"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">Q4面板确认</span><input type="checkbox" class="tt-check" aria-label="完成 Q4面板确认"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/4</span></div><div class="tt-path">ME XCT9 TD / Q3Q4面板投产</div></div><div class="today-task-card grouped" data-task="mtgyq9cphrwkno" draggable="true" style="--group-color:#d97706"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">内机空壳处理</span><input type="checkbox" class="tt-check" aria-label="完成 内机空壳处理"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:var(--blue)">设计</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/4</span></div><div class="tt-path">ME XCT9 TD</div></div><div class="today-task-card grouped" data-task="mt1ar720rvte9f" draggable="true" style="--group-color:#16a34a"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">10-22.4kw 3C认证跟进</span><input type="checkbox" class="tt-check" aria-label="完成 10-22.4kw 3C认证跟进"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">SD(HDC+KA) / 10-33.5kw投产</div></div><div class="today-task-card grouped" data-task="mszfjgf4rchem4" draggable="true" style="--group-color:#16a34a"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">10-33.5kw对比BOM</span><input type="checkbox" class="tt-check" aria-label="完成 10-33.5kw对比BOM"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">SD(HDC+KA)</div></div><div class="today-task-card grouped" data-task="mszclqgrfd6qgn" draggable="true" style="--group-color:#0891b2"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">顶出风两器售后配件</span><input type="checkbox" class="tt-check" aria-label="完成 顶出风两器售后配件"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:var(--blue)">设计</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/9/30</span></div><div class="tt-path">XCT9 TD</div></div><div class="today-task-card grouped" data-task="mszcsqtlmeidom" draggable="true" style="--group-color:#e11d48"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">手册完善</span><input type="checkbox" class="tt-check" aria-label="完成 手册完善"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p1)">P1</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--olive)">今天</span><span>截止 2026/8/31</span></div><div class="tt-path">XIAOZHI IDUs / 交流天花机维修手册</div></div></div></div><div class="today-col" data-prio="done"><div class="today-col-head" data-prio="done"><div class="col-head-left"><span class="col-title">今天完成 <span class="col-trophy" title="今日战绩">🏆</span></span><span class="col-count">3</span></div><div class="col-sort" data-prio="done"><button type="button" data-sort="type" class="active">类型</button><button type="button" data-sort="project" class="">项目</button><button type="button" data-sort="deadline" class="">截止</button><button type="button" data-sort="custom" class="">自定义</button></div></div><div class="today-col-body"><div class="today-task-card completed grouped" data-task="mtgvn0ix8d0g6o" draggable="true" style="--group-color:#9333ea"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">修改Guide Specs</span><input type="checkbox" class="tt-check" checked="" aria-label="完成 修改Guide Specs"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#9333ea">手册</span><span class="priority-badge" style="background:var(--success)">完成</span><span>截止 2026/8/31</span></div><div class="tt-path">ME XCT9 TD</div></div><div class="today-task-card completed grouped" data-task="mt9xgeuln16k3g" draggable="true" style="--group-color:#64748b"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">咨询组装送货（拓盛）</span><input type="checkbox" class="tt-check" checked="" aria-label="完成 咨询组装送货（拓盛）"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#64748b">杂事</span><span class="priority-badge" style="background:var(--success)">完成</span><span>截止 2026/8/31</span></div><div class="tt-path">20HP风管定制标配滤网 / 新增物料 / 新增过滤框组件</div></div><div class="today-task-card completed grouped" data-task="mtcltejpx8wvy2" draggable="true" style="--group-color:#0891b2"><div class="tt-head"><span class="group-dot"></span><span class="tt-name">新建支架编码</span><input type="checkbox" class="tt-check" checked="" aria-label="完成 新建支架编码"></div><div class="tt-meta"><span class="priority-badge" style="background:var(--p0)">P0</span><span class="type-badge" style="background:#0891b2">PDM</span><span class="priority-badge" style="background:var(--success)">完成</span><span>截止 2026/8/31</span></div><div class="tt-path">左接管切换直流水泵 / 新建支架物料</div></div></div></div></div>
     </section>
     <section class="completed-calendar" id="completedCalendar" data-pane="completed" aria-labelledby="completedTitle" hidden="">
@@ -948,7 +1014,7 @@ create policy "ppm own row" on ppm_workbench
   let modalStack = [], confirmAction = null;
   let activeDrag = null, dragRaf = 0, lastPointerX = 0, lastPointerY = 0, touchBarTap = null;
   let archiveExpanded = true;
-  let viewMode = 'today'; // 'gantt' | 'today' | 'completed' | 'overview'
+  let viewMode = 'todo'; // 'todo' | 'gantt' | 'today' | 'completed' | 'overview'
   let completedCalMonth = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
 
   const els = {
@@ -956,6 +1022,7 @@ create policy "ppm own row" on ppm_workbench
     navBar:$('navBar'), mainGrid:$('mainGrid'), workspace:$('workspace'), todayBoard:$('todayBoard'), todayBoardGrid:$('todayBoardGrid'),
     completedCalendar:$('completedCalendar'), completedCalendarGrid:$('completedCalendarGrid'), calMonthLabel:$('calMonthLabel'),
     overviewBoard:$('overviewBoard'), overviewSide:$('overviewSide'), overviewMain:$('overviewMain'),
+    todoBoard:$('todoBoard'), todoBody:$('todoBody'), todoImportBtn:$('todoImportBtn'),
     taskList:$('taskList'), toast:$('toast'), detailModal:$('detailModal'), detailBody:$('detailBody'),
     detailBreadcrumb:$('detailBreadcrumb'), detailBack:$('detailBack'), confirmModal:$('confirmModal'),
     projectListModal:$('projectListModal'), projectListBody:$('projectListBody'),
@@ -1036,6 +1103,9 @@ create policy "ppm own row" on ppm_workbench
     typeOrderList(); // 初始化/修补类型排序
     if(!Array.isArray(data.overviewOrder)) data.overviewOrder = []; // 项目总览：项目排序
     if(!data.overviewSelected) data.overviewSelected = null;        // 项目总览：上次选中的项目
+    if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[] }; // 今日待办：上午/下午两个板块
+    if(!Array.isArray(data.todo.morning)) data.todo.morning = [];
+    if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
     ensureProjectColors();
     lastSavedAt = data._savedAt || 0;
     if(syncCfg.enabled){ loadSbAuth(); if(sbAuthed()) await pullRemote(true); } // 启动拉取云端（含登录凭据自动续期）
@@ -1160,7 +1230,7 @@ create policy "ppm own row" on ppm_workbench
           if(trimmed.length >= 10) break;
         }
         const payload = { projects: data.projects, _savedAt: Date.now(), todaySort: data.todaySort, todayManual: data.todayManual,
-          customTypes: data.customTypes||[], typeOrder: data.typeOrder||[], deletedTypes: data.deletedTypes||[], overviewOrder: data.overviewOrder||[] };
+          customTypes: data.customTypes||[], typeOrder: data.typeOrder||[], deletedTypes: data.deletedTypes||[], overviewOrder: data.overviewOrder||[], todo: data.todo||{morning:[],afternoon:[]} };
         if(trimmed.length) payload._history = trimmed;
         await sbUpsertRow(payload);
         lastPushDoneTs = Date.now();
@@ -1216,11 +1286,12 @@ create policy "ppm own row" on ppm_workbench
         // 拉取覆盖前先保留本地视图态（排序/自定义顺序），云端副本若未存这些字段则不覆盖，避免排序被打回默认「类型」
         const _prevSort = data.todaySort, _prevManual = data.todayManual;
         // 类型管理与总览排序等本地字段：云端副本若缺失（旧版本推送没带），保留本地值不被抹掉
-        const _prevLocal = { customTypes: data.customTypes, typeOrder: data.typeOrder, deletedTypes: data.deletedTypes, overviewOrder: data.overviewOrder };
+        const _prevLocal = { customTypes: data.customTypes, typeOrder: data.typeOrder, deletedTypes: data.deletedTypes, overviewOrder: data.overviewOrder, todo: data.todo };
         data = remote; normalizeTypes(data.projects, true); lastSavedAt = data._savedAt || Date.now();
         if(!data.todaySort && _prevSort) data.todaySort = _prevSort;
         if(!data.todayManual && _prevManual) data.todayManual = _prevManual;
         Object.keys(_prevLocal).forEach(k=>{ if(!Array.isArray(data[k]) && Array.isArray(_prevLocal[k])) data[k] = _prevLocal[k]; });
+        if(!data.todo || typeof data.todo!=='object' || !Array.isArray(data.todo.morning) || !Array.isArray(data.todo.afternoon)) data.todo = _prevLocal.todo; // 云端旧版本未带 todo 时保留本地
         ensureProjectColors(); // 云端拉回旧颜色后，强制按当前项目顺序重新分配黄金角色相
         try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){}
         render(); updateSyncBtn();
@@ -1427,7 +1498,7 @@ create policy "ppm own row" on ppm_workbench
   }
 
   /* ---------- 渲染 ---------- */
-  function render(){ renderNav(); renderTimeline(); renderRows(); renderTodayBoard(); renderCompletedCalendar(); renderDate(); renderScaleTabs(); if(viewMode==='overview') renderOverview(); }
+  function render(){ renderNav(); renderTimeline(); renderRows(); renderTodayBoard(); renderCompletedCalendar(); renderDate(); renderScaleTabs(); if(viewMode==='overview') renderOverview(); if(viewMode==='todo') renderTodo(); }
 
   function renderNav(){
     const total = data.projects.length;
@@ -1436,7 +1507,8 @@ create policy "ppm own row" on ppm_workbench
     const inProgress = data.projects.reduce((s,p)=>s+getAllDeep(p.tasks).filter(t=>!t.completed).length,0);
     const completed = allTasks - inProgress;
     const buttons = [
-      { key:'today',     label:'今日待处理', primary:viewMode==='today' },
+      { key:'todo',      label:'今日待办',   primary:viewMode==='todo' },
+      { key:'today',     label:'任务看板',   primary:viewMode==='today' },
       { key:'gantt',     label:'项目甘特图', primary:viewMode==='gantt' },
       { key:'overview',  label:'项目总览',   primary:viewMode==='overview' },
       { key:'completed', label:'已完成任务', primary:viewMode==='completed', count:completed },
@@ -1447,7 +1519,7 @@ create policy "ppm own row" on ppm_workbench
     els.navBar.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click', ()=>setViewMode(btn.dataset.viewKey)));
   }
   function setViewMode(key){
-    if(key === 'gantt' || key === 'today' || key === 'completed' || key === 'overview'){ viewMode = key; applyViewMode(); return; }
+    if(key === 'todo' || key === 'gantt' || key === 'today' || key === 'completed' || key === 'overview'){ viewMode = key; applyViewMode(); return; }
     if(key === 'projects'){ openProjectListModal(); return; }
     if(key === 'archived'){ openArchivedModal(); return; }
   }
@@ -1458,9 +1530,10 @@ create policy "ppm own row" on ppm_workbench
     els.todayBoard.hidden = (viewMode !== 'today');
     els.completedCalendar.hidden = (viewMode !== 'completed');
     if(els.overviewBoard) els.overviewBoard.hidden = (viewMode !== 'overview');
+    if(els.todoBoard) els.todoBoard.hidden = (viewMode !== 'todo');
     if(viewMode === 'completed') renderCompletedCalendar();
     if(viewMode === 'overview') renderOverview();
-
+    if(viewMode === 'todo') renderTodo();
     if(viewMode === 'today') renderTodayBoard();
     requestAnimationFrame(scrollTodayIntoView);
   }
@@ -2429,6 +2502,209 @@ create policy "ppm own row" on ppm_workbench
     if((t.priority||'P1')===filt) return true;
     return (t.tasks||[]).some(c=>ovTaskMatchesPriority(c, filt)); // 保留通往命中项的祖先路径
   }
+  /* ---------- 今日待办 ---------- */
+  let todoComposerState = { openSection: null, mode: 'task' }; // 添加器状态：当前展开板块 / 当前模式
+  function taskPathLabel(id){
+    const proj = findProjectOf(id); if(!proj) return '';
+    const names = findNodePath(id).map(x => { const n = (x===proj.id) ? proj : getNode(x, [proj]); return n ? n.name : ''; }).slice(0, -1);
+    return names.length > 1 ? names.join(' / ') : (names[0] || proj.name);
+  }
+  function renderTodo(){
+    if(!els.todoBoard) return;
+    if(!data.todo || typeof data.todo!=='object' || !Array.isArray(data.todo.morning) || !Array.isArray(data.todo.afternoon)) data.todo = { morning:[], afternoon:[] };
+    const wk = els.todoBoard.querySelector('#todoWeekday'); if(wk) wk.textContent = '今天 · ' + weekNames[todayDate.getDay()];
+    const tx = els.todoBoard.querySelector('#todoText'); if(tx) tx.textContent = (todayDate.getMonth()+1) + '月' + todayDate.getDate() + '日';
+    const body = els.todoBoard.querySelector('#todoBody'); if(!body) return;
+    body.innerHTML = ['morning','afternoon'].map(sec => todoSectionHTML(sec)).join('');
+    bindTodo();
+  }
+  function todoSectionHTML(sec){
+    const label = sec==='morning' ? '上午' : '下午';
+    const icon = sec==='morning' ? '🌅' : '🌇';
+    const items = (data.todo[sec]||[]).map(it => todoItemHTML(it, sec)).join('');
+    const open = todoComposerState.openSection === sec;
+    const mode = todoComposerState.mode || 'task';
+    const count = (data.todo[sec]||[]).length;
+    return `<div class="todo-section" data-section="${sec}">
+      <div class="todo-section-head">
+        <div class="todo-section-title"><span class="todo-section-icon">${icon}</span>${label}<span class="count">${count}</span></div>
+        <button type="button" class="todo-add-btn" data-todo-add="${sec}">＋ 添加</button>
+      </div>
+      <div class="todo-list" data-todo-list="${sec}">${items || '<div class="todo-empty">暂无待办，点「＋ 添加」开始规划</div>'}</div>
+      ${open ? todoComposerHTML(sec, mode) : ''}
+    </div>`;
+  }
+  function todoItemHTML(it, sec){
+    let name='', sub='', kindClass='', done=false;
+    if(it.kind==='task'){
+      const node = getNode(it.refId);
+      if(!node){ name='（任务已删除）'; sub='<span class="todo-tag todo-tag-del">已失效</span>'; kindClass='todo-kind-task todo-dangling'; }
+      else { done = !!node.completed; name = node.name; const path = taskPathLabel(it.refId); sub = `<span class="todo-tag todo-tag-task">任务</span> ${escapeHTML(path||'')}`; kindClass='todo-kind-task'; }
+    } else { done = !!it.done; name = it.text||''; sub = '<span class="todo-tag todo-tag-custom">自定义</span>'; kindClass='todo-kind-custom'; }
+    const checked = done ? 'checked' : '';
+    return `<div class="todo-item ${kindClass}${done?' done':''}" data-todo-id="${it.id}" draggable="true">
+      <span class="todo-drag" title="拖动排序" aria-hidden="true">⠿</span>
+      <input type="checkbox" class="todo-check" data-todo-check="${it.id}" ${checked} aria-label="完成 ${escapeHTML(name)}">
+      <div class="todo-main"><div class="todo-name">${escapeHTML(name)}</div><div class="todo-sub">${sub}</div></div>
+      <button type="button" class="todo-del" data-todo-del="${it.id}" title="删除" aria-label="删除">×</button>
+    </div>`;
+  }
+  function todoComposerHTML(sec, mode){
+    return `<div class="todo-composer" data-todo-composer="${sec}">
+      <div class="todo-composer-tabs">
+        <button type="button" class="todo-tab${mode==='task'?' active':''}" data-todo-mode="task">选择现有任务</button>
+        <button type="button" class="todo-tab${mode==='custom'?' active':''}" data-todo-mode="custom">自定义</button>
+      </div>
+      <div class="todo-composer-pane todo-pane-task" ${mode==='custom'?'hidden':''}>
+        <input type="text" class="todo-search" data-todo-search placeholder="搜索项目库中的任务…">
+        <div class="todo-search-results" data-todo-results></div>
+      </div>
+      <div class="todo-composer-pane todo-pane-custom" ${mode==='task'?'hidden':''}>
+        <div class="todo-custom-input-wrap">
+          <input type="text" class="todo-custom-input" data-todo-custom placeholder="输入待办内容，回车添加">
+          <button type="button" class="btn small todo-custom-add" data-todo-custom-add="${sec}">添加</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  function bindTodo(){
+    if(!els.todoBoard) return;
+    if(els.todoImportBtn && !els.todoImportBtn.dataset.bound){ els.todoImportBtn.dataset.bound='1'; els.todoImportBtn.addEventListener('click', ()=>importYesterdayUnfinished()); }
+    els.todoBoard.querySelectorAll('[data-todo-add]').forEach(b=>b.addEventListener('click', ()=>{
+      const sec = b.dataset.todoAdd;
+      todoComposerState.openSection = (todoComposerState.openSection===sec) ? null : sec;
+      renderTodo();
+      if(todoComposerState.openSection){ const inp = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] .todo-search`); if(inp) inp.focus(); }
+    }));
+    els.todoBoard.querySelectorAll('[data-todo-mode]').forEach(b=>b.addEventListener('click', ()=>{
+      todoComposerState.mode = b.dataset.todoMode;
+      const sec = todoComposerState.openSection;
+      renderTodo();
+      if(sec){ const inp = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] .${todoComposerState.mode==='task'?'todo-search':'todo-custom-input'}`); if(inp) inp.focus(); }
+    }));
+    els.todoBoard.querySelectorAll('[data-todo-search]').forEach(inp=>inp.addEventListener('input', ()=>{
+      const sec = inp.closest('[data-todo-composer]').dataset.todoComposer;
+      renderTodoSearchResults(sec, inp.value);
+    }));
+    els.todoBoard.querySelectorAll('[data-todo-results]').forEach(c=>c.addEventListener('click', e=>{
+      const r = e.target.closest('[data-todo-result]'); if(!r) return;
+      const sec = c.closest('[data-todo-composer]').dataset.todoComposer;
+      addTodoItem(sec, { id: uid(), kind:'task', refId: r.dataset.todoResult });
+      renderTodo();
+      if(todoComposerState.openSection){ const inp = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] .todo-search`); if(inp){ inp.focus(); renderTodoSearchResults(sec, ''); } }
+    }));
+    els.todoBoard.querySelectorAll('[data-todo-custom]').forEach(inp=>inp.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){ e.preventDefault(); const sec = inp.closest('[data-todo-composer]').dataset.todoComposer; commitCustom(sec, inp.value); }
+    }));
+    els.todoBoard.querySelectorAll('[data-todo-custom-add]').forEach(b=>b.addEventListener('click', ()=>{
+      const sec = b.dataset.todoCustomAdd;
+      const inp = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] .todo-custom-input`);
+      commitCustom(sec, inp ? inp.value : '');
+    }));
+    els.todoBoard.querySelectorAll('[data-todo-check]').forEach(ch=>ch.addEventListener('change', ()=>toggleTodoItem(ch.dataset.todoCheck)));
+    els.todoBoard.querySelectorAll('[data-todo-del]').forEach(b=>b.addEventListener('click', ()=>deleteTodoItem(b.dataset.todoDel)));
+    bindTodoDrag();
+  }
+  function renderTodoSearchResults(sec, query){
+    const container = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] [data-todo-results]`);
+    if(!container) return;
+    query = (query||'').trim();
+    const existingRefs = new Set([...(data.todo.morning||[]), ...(data.todo.afternoon||[])].filter(i=>i.kind==='task').map(i=>i.refId));
+    if(!query){ container.innerHTML = '<div class="todo-search-empty">输入关键字搜索项目库任务</div>'; return; }
+    const q = query.toLowerCase();
+    const results = [];
+    data.projects.forEach(p=>{ getAllDeep(p.tasks).forEach(t=>{
+      if(t.tasks && t.tasks.length) return;
+      if(existingRefs.has(t.id)) return;
+      if((t.name||'').toLowerCase().includes(q)){ const proj = findProjectOf(t.id); results.push({ id:t.id, name:t.name, path:taskPathLabel(t.id), color:(proj&&proj.color)||'#8e8e93' }); }
+    }); });
+    if(!results.length){ container.innerHTML = '<div class="todo-search-empty">无匹配任务</div>'; return; }
+    container.innerHTML = results.slice(0,30).map(r=>`<button type="button" class="todo-result" data-todo-result="${r.id}"><span class="todo-result-dot" style="background:${r.color}"></span><span class="todo-result-name">${escapeHTML(r.name)}</span><span class="todo-result-path">${escapeHTML(r.path||'')}</span></button>`).join('');
+  }
+  function findTodoItem(id){
+    for(const sec of ['morning','afternoon']){
+      const arr = data.todo[sec]||[]; const idx = arr.findIndex(i=>i.id===id);
+      if(idx>=0) return { item:arr[idx], sec, idx };
+    }
+    return null;
+  }
+  function addTodoItem(sec, item){
+    if(!data.todo) data.todo = {morning:[], afternoon:[]};
+    if(!data.todo[sec]) data.todo[sec] = [];
+    data.todo[sec].push(item);
+    saveData(); render();
+  }
+  function deleteTodoItem(id){
+    const f = findTodoItem(id); if(!f) return;
+    data.todo[f.sec].splice(f.idx, 1);
+    saveData(); render();
+  }
+  function toggleTodoItem(id){
+    const f = findTodoItem(id); if(!f) return;
+    const it = f.item;
+    if(it.kind==='task'){
+      const node = getNode(it.refId);
+      if(!node){ data.todo[f.sec].splice(f.idx, 1); saveData(); render(); return; }
+      const willDone = !node.completed;
+      if(willDone){ const cb = els.todoBoard.querySelector(`[data-todo-check="${id}"]`); if(cb){ const rect = cb.getBoundingClientRect(); playCompleteFx(rect); } }
+      setCompletedCascade(it.refId, willDone);
+      render();
+    } else { it.done = !it.done; saveData(); render(); }
+  }
+  function commitCustom(sec, text){
+    text = (text||'').trim(); if(!text) return;
+    addTodoItem(sec, { id: uid(), kind:'custom', text, done:false });
+    renderTodo();
+    const inp = els.todoBoard.querySelector(`[data-todo-composer="${sec}"] .todo-custom-input`);
+    if(inp){ inp.value=''; inp.focus(); }
+  }
+  function importYesterdayUnfinished(){
+    const y = toISO(addDays(todayDate, -1));
+    if(!data.todo) data.todo = {morning:[], afternoon:[]};
+    if(!data.todo.morning) data.todo.morning = [];
+    if(!data.todo.afternoon) data.todo.afternoon = [];
+    const existingRefs = new Set([...data.todo.morning, ...data.todo.afternoon].filter(i=>i.kind==='task').map(i=>i.refId));
+    const added = [];
+    data.projects.forEach(p=>{ getAllDeep(p.tasks).forEach(t=>{
+      if(t.tasks && t.tasks.length) return;
+      if(t.completed) return;
+      const e = parseISO(t.end);
+      if(e && toISO(e) === y && !existingRefs.has(t.id)){ data.todo.morning.push({ id: uid(), kind:'task', refId: t.id }); added.push(t.name); existingRefs.add(t.id); }
+    }); });
+    if(added.length){ saveData(); render(); showToast(`已将 ${added.length} 个昨日未完成任务加入上午`); }
+    else { showToast('昨日没有未完成的任务'); }
+  }
+  function bindTodoDrag(){
+    const lists = els.todoBoard.querySelectorAll('.todo-list');
+    lists.forEach(list=>{
+      const sec = list.dataset.todoList;
+      list.querySelectorAll('.todo-item[draggable="true"]').forEach(item=>{
+        item.addEventListener('dragstart', e=>{ item.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', item.dataset.todoId); });
+        item.addEventListener('dragend', ()=>{ item.classList.remove('dragging'); list.querySelectorAll('.todo-item').forEach(x=>x.classList.remove('drag-over')); });
+        item.addEventListener('dragover', e=>{
+          e.preventDefault();
+          const dragging = list.querySelector('.todo-item.dragging');
+          if(!dragging || dragging===item) return;
+          const after = getDragAfterElementTodo(list, e.clientY);
+          if(after==null) list.appendChild(dragging); else list.insertBefore(dragging, after);
+          list.querySelectorAll('.todo-item').forEach(x=>x.classList.toggle('drag-over', x===after));
+        });
+        item.addEventListener('drop', e=>{
+          e.preventDefault();
+          const ids = [...list.querySelectorAll('.todo-item')].map(x=>x.dataset.todoId);
+          const arr = data.todo[sec]||[]; const map = {}; arr.forEach(i=>map[i.id]=i);
+          data.todo[sec] = ids.map(id=>map[id]).filter(Boolean);
+          saveData(); render();
+        });
+      });
+    });
+  }
+  function getDragAfterElementTodo(container, y){
+    const els2 = [...container.querySelectorAll('.todo-item:not(.dragging)')];
+    let closest = { dist:-Infinity, el:null };
+    for(const child of els2){ const box = child.getBoundingClientRect(); const offset = y - box.top - box.height/2; if(offset < 0 && offset > closest.dist){ closest = { dist:offset, el:child }; } }
+    return closest.el;
+  }
   function renderOverview(){
     if(!els.overviewSide || !els.overviewMain) return;
     const order = ovOrderList();
@@ -2854,13 +3130,14 @@ create policy "ppm own row" on ppm_workbench
     clone.querySelectorAll('.modal-overlay.active').forEach(el => el.classList.remove('active'));
     // 2) 清除敏感输入框的值，避免把 Token/密码等带进公开仓库
     clone.querySelectorAll('#pagesToken, #sbKey, #sbPassword').forEach(el => { if(el) el.value = ''; });
-    // 3) 发布时重置视图状态为默认「今日待处理」，避免发布瞬间用户停在其它视图，导致 GitHub Pages 默认显示错误视图
-    const mg = clone.querySelector('#mainGrid'); if(mg) mg.dataset.view = 'today';
+    // 3) 发布时重置视图状态为默认「今日待办」，避免发布瞬间用户停在其它视图，导致 GitHub Pages 默认显示错误视图
+    const mg = clone.querySelector('#mainGrid'); if(mg) mg.dataset.view = 'todo';
     const ws = clone.querySelector('#workspace'); if(ws){ ws.setAttribute('hidden',''); ws.hidden = true; }
-    const tb = clone.querySelector('#todayBoard'); if(tb){ tb.removeAttribute('hidden'); tb.hidden = false; }
+    const tb = clone.querySelector('#todayBoard'); if(tb){ tb.setAttribute('hidden',''); tb.hidden = true; }
+    const tob = clone.querySelector('#todoBoard'); if(tob){ tob.removeAttribute('hidden'); tob.hidden = false; }
     const cc = clone.querySelector('#completedCalendar'); if(cc){ cc.setAttribute('hidden',''); cc.hidden = true; }
     clone.querySelectorAll('.nav-btn.primary').forEach(btn => btn.classList.remove('primary'));
-    const todayBtn = clone.querySelector('[data-view-key="today"].nav-btn'); if(todayBtn) todayBtn.classList.add('primary');
+    const todoBtn = clone.querySelector('[data-view-key="todo"].nav-btn'); if(todoBtn) todoBtn.classList.add('primary');
     // 4) 移除脚本，避免后续正则误伤脚本文本
     const scriptEl = clone.querySelector('script');
     if(scriptEl) scriptEl.remove();
