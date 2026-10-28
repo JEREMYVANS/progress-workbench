@@ -195,6 +195,10 @@
   .calendar-cell.expanded .calendar-task-list{max-height:none;overflow:visible}
   .calendar-task{padding:3px 7px;border-radius:6px;background:rgba(52,199,89,.10);color:var(--success);font-size:11px;font-weight:600;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:background .15s,transform .1s}
   .calendar-task:hover{background:rgba(52,199,89,.20);transform:translateY(-1px)}
+  .calendar-task.custom{background:rgba(255,149,0,.12);color:#c2410c;display:flex;align-items:center;gap:4px}
+  html[data-theme="dark"] .calendar-task.custom{color:#ff9f0a}
+  .calendar-task.custom:hover{background:rgba(255,149,0,.22)}
+  .calendar-task .cal-tag{flex:none;font-size:9px;font-weight:700;padding:1px 4px;border-radius:4px;background:rgba(255,149,0,.22);color:inherit}
   .calendar-more{height:20px;margin-top:auto;align-self:center;padding:0 8px;border:0;border-radius:999px;background:var(--line);color:var(--muted);font-size:10.5px;font-weight:600;cursor:pointer;display:none}
   .calendar-more.visible{display:inline-flex;align-items:center}
   .calendar-more:hover{background:var(--line-strong);color:var(--text)}
@@ -719,6 +723,9 @@
   .ov-task[draggable="true"]{cursor:grab}
   .ov-task.dragging{opacity:.4;cursor:grabbing}
   .ov-task.ov-drop-child{box-shadow:inset 0 0 0 2px var(--blue);background:rgba(10,132,255,.07);border-radius:10px}
+  .ov-check{width:18px;height:18px;flex:none;cursor:pointer;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
+  .ov-check:checked{background:var(--blue);border-color:var(--blue)}
+  .ov-check:checked::after{content:"✓";color:#fff;font-size:12px;font-weight:700;line-height:1}
   .ov-head.ov-drop-root{box-shadow:inset 0 0 0 2px var(--blue);border-radius:14px}
   .ov-twist-spacer{width:20px;flex:0 0 auto}
   @media (max-width:860px){
@@ -729,7 +736,7 @@
 </style></head>
 <body class="modal-open">
 <div id="bootSplash" aria-hidden="true"><div class="boot-mark">PD</div></div>
-<header class="topbar"><div class="topbar-inner"><div class="brand"><div class="brand-mark">PD</div><div><h1>Project Dashboard</h1><p>项目进度 · 子任务 · 甘特图</p></div></div><div class="topbar-right"><nav class="nav-bar" id="navBar" aria-label="视图与快捷"><button type="button" class="nav-btn primary" data-view-key="todo">今日待办</button><button type="button" class="nav-btn" data-view-key="today">任务看板</button><button type="button" class="nav-btn" data-view-key="gantt">项目甘特图</button><button type="button" class="nav-btn" data-view-key="overview">项目总览</button><button type="button" class="nav-btn" data-view-key="completed">已完成任务</button><button type="button" class="nav-btn" data-view-key="projects">全部项目</button><button type="button" class="nav-btn" data-view-key="archived">已归档</button></nav><nav class="actions" aria-label="工作台主要操作">
+<header class="topbar"><div class="topbar-inner"><div class="brand"><div class="brand-mark">PD</div><div><h1>Project Dashboard</h1></div></div><div class="topbar-right"><nav class="nav-bar" id="navBar" aria-label="视图与快捷"><button type="button" class="nav-btn primary" data-view-key="todo">今日待办</button><button type="button" class="nav-btn" data-view-key="today">任务看板</button><button type="button" class="nav-btn" data-view-key="gantt">项目甘特图</button><button type="button" class="nav-btn" data-view-key="overview">项目总览</button><button type="button" class="nav-btn" data-view-key="completed">已完成任务</button><button type="button" class="nav-btn" data-view-key="projects">全部项目</button><button type="button" class="nav-btn" data-view-key="archived">已归档</button></nav><nav class="actions" aria-label="工作台主要操作">
   <button class="btn icon" id="refreshBtn" type="button" aria-label="刷新页面">↻</button>
   <div class="backup-wrap">
     <button class="btn" id="backupBtn" type="button" aria-haspopup="true" aria-expanded="false">备份</button>
@@ -1981,6 +1988,15 @@ create policy "ppm own row" on ppm_workbench
         byDate[d].push({ task:t, proj, pathLabel: buildTaskPathLabel(t, p) });
       });
     });
+    // 已完成任务日历同时纳入「今日待办」中已完成的自定义项
+    ['morning','afternoon'].forEach(sec=>{
+      (data.todo[sec]||[]).forEach(it=>{
+        if(it.kind!=='custom' || !it.done) return;
+        const d = it.doneAt || todayISO;
+        if(!byDate[d]) byDate[d]=[];
+        byDate[d].push({ task:{ id:it.id, name:it.text, custom:true }, proj:null, pathLabel:'今日待办·自定义', custom:true });
+      });
+    });
 
     const firstDay = new Date(year, month, 1);
     const startOffset = firstDay.getDay(); // 0=周日
@@ -1997,6 +2013,9 @@ create policy "ppm own row" on ppm_workbench
       const dowText = weekNames[cellDate.getDay()];
 
       const taskItems = dayTasks.map(it=>{
+        if(it.custom){
+          return `<div class="calendar-task custom" title="${escapeHTML(it.task.name)} · 今日待办·自定义">${escapeHTML(it.task.name)}<span class="cal-tag">自定义</span></div>`;
+        }
         return `<div class="calendar-task" data-task="${it.task.id}" title="${escapeHTML(it.task.name)}${it.pathLabel?' · '+escapeHTML(it.pathLabel):''}">${escapeHTML(it.task.name)}</div>`;
       }).join('');
 
@@ -2720,7 +2739,7 @@ create policy "ppm own row" on ppm_workbench
       if(willDone){ const cb = els.todoBoard.querySelector(`[data-todo-check="${id}"]`); if(cb){ const rect = cb.getBoundingClientRect(); playCompleteFx(rect); } }
       setCompletedCascade(it.refId, willDone);
       render();
-    } else { it.done = !it.done; saveData(); render(); }
+    } else { it.done = !it.done; if(it.done) it.doneAt = todayISO; saveData(); render(); }
   }
   function importYesterdayUnfinished(){
     const y = toISO(addDays(todayDate, -1));
@@ -3448,7 +3467,7 @@ create policy "ppm own row" on ppm_workbench
         return;
       }
       const task = e.target.closest('.calendar-task');
-      if(task) openDetail(task.dataset.task);
+      if(task && task.dataset.task) openDetail(task.dataset.task);
     });
 
     $('scaleTabs').addEventListener('click', e=>{ const b=e.target.closest('[data-scale]'); if(b) setScale(b.dataset.scale); });
