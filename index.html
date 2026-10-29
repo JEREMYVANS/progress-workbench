@@ -393,7 +393,7 @@
   .detail-node .form-grid .field:nth-child(3){grid-column:4/5}
   .detail-node .form-grid .field:nth-child(4){grid-column:1/3}
   .detail-node .form-grid .field:nth-child(5){grid-column:3/5}
-  .detail-node .form-grid .date-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 14px}
+  .detail-node .form-grid .date-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px 14px}
   @media(max-width:760px){
     .modal{padding:18px 16px}
     .detail-node{padding:14px}
@@ -1175,12 +1175,20 @@ create policy "ppm own row" on ppm_workbench
     if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
     if(typeof data.todo.lastDay === 'undefined') data.todo.lastDay = null;          // 上一次打开的日期（ISO），用于跨天清空判定
     if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = []; // 跨天时被清空的「未完成」待办，等待「昨天未完成→今天」重新拉回
+    // 一次性迁移（_r2 标记）：旧版本"首次运行只记 lastDay 不清空"会让 lastDay 被写成"今天"却残留昨天的待办，
+    // 导致跨天不清空。这里在拉云之前强制清空一次，遗留的未完成项（含自定义）会进入快照，可从「昨天未完成→今天」拉回。
+    if(data.todo._r2 !== '1'){ rolloverTodoDay(); }
     ensureProjectColors();
     normalizeTree(data.projects); // 防御：保证每棵节点都有 tasks 数组（防止手工/旧备份数据缺字段导致遍历异常）
     lastSavedAt = data._savedAt || 0;
     if(syncCfg.enabled){ loadSbAuth(); if(sbAuthed()) await pullRemote(true); } // 启动拉取云端（含登录凭据自动续期）
+    const _lastBefore = data.todo.lastDay;
     rolloverTodoDay(); // 跨天：把昨日未完成的待办快照后清空今日板块
+    const _rolled = (_lastBefore !== data.todo.lastDay); // 是否真的发生了跨天清空
+    data.todo._r2 = '1'; // 标记迁移完成，避免每次启动重复强制清空
     saveData(true, true); // 启动时只写本地且不刷新时间戳，避免"未修改的启动"显得比云端新
+    // 跨天清空后必须把"已清空"的待办同步到云端：否则云端仍是旧待办，下一次轮询拉取会把它们覆盖回来（板子又变满）。
+    if(_rolled && syncCfg.enabled && sbAuthed()){ try{ pushRemote(); }catch(e){} }
     loadingData = false;
   }
   // 跨天处理：新的一天清空「今日待办」的上午/下午板块，并把其中"未完成"的项暂存到 yesterdayUnfinished，供「昨天未完成→今天」重新拉回。
@@ -2234,7 +2242,7 @@ create policy "ppm own row" on ppm_workbench
       <div class="date-row">
         <div class="field"><label>开始日期</label><input type="date" id="dStart" value="${isNew?detailDraft.start:(node.start||'')}"></div>
         <div class="field"><label>结束日期</label><input type="date" id="dEnd" value="${isNew?detailDraft.end:(node.end||'')}"></div>
-        <div class="field"><label>完成日期</label><input type="date" id="dCompletedAt" value="${node?(node.completedAt||''):''}"><span class="field-hint">用于「已完成任务」日历归类</span></div>
+        ${(!isNew && node && node.completed) ? `<div class="field"><label>完成日期</label><input type="date" id="dCompletedAt" value="${node.completedAt||''}"></div>` : ''}
       </div>
     </div>`;
     if(!isNew){
