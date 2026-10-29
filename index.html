@@ -202,6 +202,12 @@
   .calendar-more{height:20px;margin-top:auto;align-self:center;padding:0 8px;border:0;border-radius:999px;background:var(--line);color:var(--muted);font-size:10.5px;font-weight:600;cursor:pointer;display:none}
   .calendar-more.visible{display:inline-flex;align-items:center}
   .calendar-more:hover{background:var(--line-strong);color:var(--text)}
+  /* 已完成任务日历：拖动任务到其它日期调整完成日期 */
+  .calendar-task[draggable="true"]{cursor:grab}
+  .calendar-task[draggable="true"]:active{cursor:grabbing}
+  .calendar-cell.drag-over{outline:2px dashed var(--blue);outline-offset:-2px;background:rgba(10,132,255,.08)}
+  html[data-theme="dark"] .calendar-cell.drag-over{background:rgba(10,132,255,.16)}
+  .field-hint{display:block;margin-top:3px;font-size:10.5px;color:var(--muted);line-height:1.3}
   @media(max-width:760px){.calendar-grid{grid-auto-rows:minmax(96px,1fr);gap:6px;padding:8px 14px 14px}.calendar-weekdays{padding:10px 14px 0;gap:6px;font-size:10.5px}.completed-calendar-head{padding:12px 14px}.calendar-task{font-size:10px}.calendar-cell{padding:5px}}
 
   /* ── Workspace / Gantt head ── */
@@ -579,6 +585,7 @@
   .todo-head-left{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .todo-import{font-size:12.5px;padding:7px 13px}
   .todo-import:hover{background:rgba(60,60,67,.10);border-color:var(--line-strong)}
+  .todo-import.is-disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
   .todo-body{padding:18px 22px 26px;display:flex;flex-direction:column;gap:18px}
   .todo-section{border:0.5px solid var(--line);border-radius:var(--radius-lg);background:var(--panel2);overflow:hidden}
   .todo-section-head{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:0.5px solid var(--line)}
@@ -599,7 +606,7 @@
   .todo-check{flex:none;width:18px;height:18px;margin-top:1px;cursor:pointer;-webkit-appearance:none;appearance:none;border:0.5px solid var(--line-strong);border-radius:5px;background:var(--panel);display:grid;place-items:center;position:relative}
   .todo-check:checked{background:var(--success);border-color:var(--success)}
   .todo-check:checked::after{content:"";width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translateY(-1px)}
-  .todo-main{flex:1;min-width:0}
+  .todo-main{flex:1;min-width:0;cursor:pointer}
   .todo-name{font-size:13.5px;font-weight:600;line-height:1.35;color:var(--text);word-break:break-word}
   .todo-item.done .todo-name{text-decoration:line-through;color:var(--muted)}
   .todo-sub{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
@@ -774,7 +781,7 @@
           <h2 id="todoTitle">今日待办</h2>
           <div class="today-date workday" id="todoDatePill"><span id="todoWeekday">今天</span><strong id="todoText"></strong></div>
         </div>
-        <div class="todo-head-actions"><button type="button" class="btn small todo-import" id="todoImportBtn" title="把昨天（截止日=昨天）且未完成的任务加入上午板块">昨天未完成 → 今天</button></div>
+        <div class="todo-head-actions"><button type="button" class="btn small todo-import" id="todoImportBtn" title="把昨天在「今日待办」里未完成（未勾选）的任务，重新加入今天的对应板块">昨天未完成 → 今天</button></div>
       </div>
       <div class="todo-body" id="todoBody"></div>
     </section>
@@ -1161,14 +1168,41 @@ create policy "ppm own row" on ppm_workbench
     typeOrderList(); // 初始化/修补类型排序
     if(!Array.isArray(data.overviewOrder)) data.overviewOrder = []; // 项目总览：项目排序
     if(!data.overviewSelected) data.overviewSelected = null;        // 项目总览：上次选中的项目
-    if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[] }; // 今日待办：上午/下午两个板块
+    if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[] }; // 今日待办：上午/下午两个板块 + 跨天快照
     if(!Array.isArray(data.todo.morning)) data.todo.morning = [];
     if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
+    if(typeof data.todo.lastDay === 'undefined') data.todo.lastDay = null;          // 上一次打开的日期（ISO），用于跨天清空判定
+    if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = []; // 跨天时被清空的「未完成」待办，等待「昨天未完成→今天」重新拉回
     ensureProjectColors();
+    normalizeTree(data.projects); // 防御：保证每棵节点都有 tasks 数组（防止手工/旧备份数据缺字段导致遍历异常）
     lastSavedAt = data._savedAt || 0;
     if(syncCfg.enabled){ loadSbAuth(); if(sbAuthed()) await pullRemote(true); } // 启动拉取云端（含登录凭据自动续期）
+    rolloverTodoDay(); // 跨天：把昨日未完成的待办快照后清空今日板块
     saveData(true, true); // 启动时只写本地且不刷新时间戳，避免"未修改的启动"显得比云端新
     loadingData = false;
+  }
+  // 跨天处理：新的一天清空「今日待办」的上午/下午板块，并把其中"未完成"的项暂存到 yesterdayUnfinished，供「昨天未完成→今天」重新拉回。
+  // 注意：仅当 lastDay 已在过去（≠今天）才清空；首次运行（lastDay 为 null）只记录当天，不清空，避免误清空历史数据。
+  function rolloverTodoDay(){
+    if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[] };
+    if(!Array.isArray(data.todo.morning)) data.todo.morning = [];
+    if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
+    if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = [];
+    const today = toISO(new Date());
+    if(data.todo.lastDay === null || data.todo.lastDay === undefined){ data.todo.lastDay = today; return; } // 首次运行：仅记录，不清空
+    if(data.todo.lastDay === today) return; // 同一天：不处理
+    const unfinished = [];
+    ['morning','afternoon'].forEach(sec=>{
+      (data.todo[sec]||[]).forEach(it=>{
+        const done = (it.kind==='task') ? (()=>{ const n=getNode(it.refId); return n ? !!n.completed : true; })() : !!it.done;
+        if(!done) unfinished.push({ sec, item:it });
+      });
+    });
+    const seen = new Set((data.todo.yesterdayUnfinished||[]).map(u=>u.item && u.item.id));
+    unfinished.forEach(u=>{ if(u.item && u.item.id && !seen.has(u.item.id)){ data.todo.yesterdayUnfinished.push(u); seen.add(u.item.id); } });
+    data.todo.morning = [];
+    data.todo.afternoon = [];
+    data.todo.lastDay = today;
   }
   // 设备标识：每台设备/每个浏览器入口生成一次，用于多端同步诊断
   const deviceId = (()=>{ try{ let d=localStorage.getItem(LS_KEY+'_dev'); if(!d){ d='dev-'+uid(); localStorage.setItem(LS_KEY+'_dev', d); } return d; }catch(e){ return 'dev-local'; } })();
@@ -1475,14 +1509,25 @@ create policy "ppm own row" on ppm_workbench
     (data.projects||[]).forEach((p,i)=>{ p.color = palette[i] || COLORS[i % COLORS.length]; });
   }
   function getAllDeep(tasks){ let arr=[]; (tasks||[]).forEach(t=>{ arr.push(t); arr=arr.concat(getAllDeep(t.tasks)); }); return arr; }
-  function getNode(id, list=data.projects){
-    for(const p of list){ if(p.id===id) return p; const f=getNode(id, p.tasks); if(f) return f; }
+  // 防御性规范化：递归确保每一个节点都有 tasks 数组（兼容手工编辑/旧备份缺失字段的情况）
+  function normalizeTree(nodes){
+    (nodes||[]).forEach(n=>{
+      if(n && !Array.isArray(n.tasks)) n.tasks = [];
+      normalizeTree(n.tasks);
+    });
+  }
+  function getNode(id, list=data.projects, seen){
+    if(!seen){ seen = new Set(); }
+    for(const p of (list||[])){ if(seen.has(p)) return null; seen.add(p); if(p.id===id) return p; const f=getNode(id, Array.isArray(p.tasks)?p.tasks:[], seen); if(f) return f; }
     return null;
   }
-  function findNodePath(id, list=data.projects, trail=[]){
-    for(const p of list){
+  function findNodePath(id, list=data.projects, trail=[], seen){
+    if(!seen) seen = new Set();
+    for(const p of (list||[])){
+      if(seen.has(p)) return null;
+      seen.add(p);
       if(p.id===id) return [...trail, p.id];
-      const r = findNodePath(id, p.tasks, [...trail, p.id]);
+      const r = findNodePath(id, Array.isArray(p.tasks)?p.tasks:[], [...trail, p.id], seen);
       if(r) return r;
     }
     return null;
@@ -2014,9 +2059,9 @@ create policy "ppm own row" on ppm_workbench
 
       const taskItems = dayTasks.map(it=>{
         if(it.custom){
-          return `<div class="calendar-task custom" title="${escapeHTML(it.task.name)} · 今日待办·自定义">${escapeHTML(it.task.name)}<span class="cal-tag">自定义</span></div>`;
+          return `<div class="calendar-task custom" draggable="true" data-cal-custom="${it.task.id}" title="拖动可调整完成日期 · ${escapeHTML(it.task.name)} · 今日待办·自定义">${escapeHTML(it.task.name)}<span class="cal-tag">自定义</span></div>`;
         }
-        return `<div class="calendar-task" data-task="${it.task.id}" title="${escapeHTML(it.task.name)}${it.pathLabel?' · '+escapeHTML(it.pathLabel):''}">${escapeHTML(it.task.name)}</div>`;
+        return `<div class="calendar-task" draggable="true" data-cal-task="${it.task.id}" title="拖动可调整完成日期 · ${escapeHTML(it.task.name)}${it.pathLabel?' · '+escapeHTML(it.pathLabel):''}">${escapeHTML(it.task.name)}</div>`;
       }).join('');
 
       html += `<div class="calendar-cell ${inMonth?'':'other-month'} ${isToday?'today':''}" data-cal-date="${iso}" data-tasks="${dayTasks.length}">
@@ -2046,6 +2091,42 @@ create policy "ppm own row" on ppm_workbench
     });
   }
 
+  // 已完成任务日历：拖动任务到其它日期 → 仅调整其「完成日期」（completedAt / 自定义项 doneAt）
+  let calDragInfo = null;
+  function bindCompletedCalendarDrag(){
+    const grid = els.completedCalendarGrid; if(!grid) return;
+    grid.addEventListener('dragstart', e=>{
+      const t = e.target.closest('.calendar-task'); if(!t) return;
+      e.dataTransfer.effectAllowed = 'move';
+      if(t.dataset.calTask) calDragInfo = { id:t.dataset.calTask, kind:'task' };
+      else if(t.dataset.calCustom) calDragInfo = { id:t.dataset.calCustom, kind:'custom' };
+      else calDragInfo = null;
+      if(calDragInfo) e.dataTransfer.setData('text/plain', JSON.stringify(calDragInfo));
+    });
+    grid.addEventListener('dragend', ()=>{ calDragInfo=null; grid.querySelectorAll('.calendar-cell').forEach(c=>c.classList.remove('drag-over')); });
+    grid.addEventListener('dragover', e=>{
+      const cell = e.target.closest('.calendar-cell'); if(!cell || !calDragInfo) return;
+      e.preventDefault();
+      grid.querySelectorAll('.calendar-cell').forEach(c=>c.classList.toggle('drag-over', c===cell));
+    });
+    grid.addEventListener('drop', e=>{
+      const cell = e.target.closest('.calendar-cell'); if(!cell || !calDragInfo) return;
+      e.preventDefault();
+      const info = calDragInfo; calDragInfo = null;
+      grid.querySelectorAll('.calendar-cell').forEach(c=>c.classList.remove('drag-over'));
+      const newDate = cell.dataset.calDate; if(!newDate) return;
+      if(info.kind==='task'){
+        const node = getNode(info.id); if(!node) return;
+        node.completedAt = newDate; // 仅调整完成日期，不影响计划开始/结束
+      } else {
+        for(const sec of ['morning','afternoon']){
+          const it = (data.todo[sec]||[]).find(i=>i.id===info.id && i.kind==='custom');
+          if(it){ it.doneAt = newDate; break; }
+        }
+      }
+      saveData(); renderCompletedCalendar(); showToast('已完成日期已调整为 ' + newDate);
+    });
+  }
   function buildTaskPathLabel(task, project){
     const path = findNodePath(task.id);
     if(!path || path.length<=1) return project ? project.name : '';
@@ -2139,6 +2220,7 @@ create policy "ppm own row" on ppm_workbench
       <div class="field"><label>优先级</label><select id="dPriority">${['P0','P1'].map(p=>`<option value="${p}" ${((isNew?detailDraft.priority:(node.priority||'P1'))===p)?'selected':''}>${p} ${priorityText(p)}</option>`).join('')}</select></div>
       <div class="field"><label>开始日期</label><input type="date" id="dStart" value="${isNew?detailDraft.start:(node.start||'')}"></div>
       <div class="field"><label>结束日期</label><input type="date" id="dEnd" value="${isNew?detailDraft.end:(node.end||'')}"></div>
+      ${ (!isNew && node.completed) ? `<div class="field"><label>完成日期</label><input type="date" id="dCompletedAt" value="${node.completedAt || ''}"><span class="field-hint">用于「已完成任务」日历归类</span></div>` : '' }
     </div>`;
     if(!isNew){
       const checkText = isProject ? '标记项目已完成（自动归档）' : '标记为已完成';
@@ -2370,6 +2452,7 @@ create policy "ppm own row" on ppm_workbench
     const prio = $('dPriority'); if(prio) prio.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.priority=prio.value; else { const n=currentNode(); if(n){n.priority=prio.value; saveData(); renderRows(); renderNav();} } });
     const start = $('dStart'); if(start) start.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.start=start.value; else { const n=currentNode(); if(n){n.start=start.value; saveData(); renderRows();} } });
     const end = $('dEnd'); if(end) end.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.end=end.value; else { const n=currentNode(); if(n){n.end=end.value; saveData(); renderRows();} } });
+    const completedAt = $('dCompletedAt'); if(completedAt) completedAt.addEventListener('change', ()=>{ const n=currentNode(); if(n && n.completed){ n.completedAt = completedAt.value || null; saveData(); renderCompletedCalendar(); renderRows(); renderNav(); } });
     const completed = $('dCompleted'); if(completed) completed.onchange = ()=>{
       const n=currentNode(); if(!n) return;
       if(completed.checked) playCompleteFx(completed.getBoundingClientRect());
@@ -2586,6 +2669,14 @@ create policy "ppm own row" on ppm_workbench
     if(!data.todo || typeof data.todo!=='object' || !Array.isArray(data.todo.morning) || !Array.isArray(data.todo.afternoon)) data.todo = { morning:[], afternoon:[] };
     const wk = els.todoBoard.querySelector('#todoWeekday'); if(wk) wk.textContent = '今天 · ' + weekNames[todayDate.getDay()];
     const tx = els.todoBoard.querySelector('#todoText'); if(tx) tx.textContent = (todayDate.getMonth()+1) + '月' + todayDate.getDate() + '日';
+    // 「昨天未完成 → 今天」按钮：根据待导入数量显示徽标并禁用/启用
+    const ib = els.todoBoard.querySelector('#todoImportBtn');
+    if(ib){
+      const pend = (data.todo.yesterdayUnfinished||[]).length;
+      ib.textContent = '昨天未完成 → 今天' + (pend ? ` (${pend})` : '');
+      ib.disabled = !pend;
+      ib.classList.toggle('is-disabled', !pend);
+    }
     const body = els.todoBoard.querySelector('#todoBody'); if(!body) return;
     body.innerHTML = ['morning','afternoon'].map(sec => todoSectionHTML(sec)).join('');
     bindTodo();
@@ -2708,6 +2799,14 @@ create policy "ppm own row" on ppm_workbench
     els.todoBoard.querySelectorAll('[data-todo-add]').forEach(b=>b.addEventListener('click', ()=>openTodoPicker(b.dataset.todoAdd)));
     els.todoBoard.querySelectorAll('[data-todo-check]').forEach(ch=>ch.addEventListener('change', ()=>toggleTodoItem(ch.dataset.todoCheck)));
     els.todoBoard.querySelectorAll('[data-todo-del]').forEach(b=>b.addEventListener('click', ()=>deleteTodoItem(b.dataset.todoDel)));
+    // 属于项目的子任务：单击主体区域即打开其属性编辑（钻取详情），自定义项不触发
+    els.todoBoard.querySelectorAll('.todo-item').forEach(item=>{
+      const main = item.querySelector('.todo-main');
+      if(main) main.addEventListener('click', ()=>{
+        const f = findTodoItem(item.dataset.todoId);
+        if(f && f.item.kind==='task' && f.item.refId) openDetail(f.item.refId);
+      });
+    });
     bindTodoPicker();
     bindTodoDrag();
   }
@@ -2742,20 +2841,29 @@ create policy "ppm own row" on ppm_workbench
     } else { it.done = !it.done; if(it.done) it.doneAt = todayISO; saveData(); render(); }
   }
   function importYesterdayUnfinished(){
-    const y = toISO(addDays(todayDate, -1));
-    if(!data.todo) data.todo = {morning:[], afternoon:[]};
-    if(!data.todo.morning) data.todo.morning = [];
-    if(!data.todo.afternoon) data.todo.afternoon = [];
+    if(!data.todo) data.todo = {morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[]};
+    if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = [];
+    const pend = data.todo.yesterdayUnfinished;
+    if(!pend.length){ showToast('昨天没有未完成的任务'); return; }
+    const existingIds = new Set([...data.todo.morning, ...data.todo.afternoon].map(i=>i.id));
     const existingRefs = new Set([...data.todo.morning, ...data.todo.afternoon].filter(i=>i.kind==='task').map(i=>i.refId));
-    const added = [];
-    data.projects.forEach(p=>{ getAllDeep(p.tasks).forEach(t=>{
-      if(t.tasks && t.tasks.length) return;
-      if(t.completed) return;
-      const e = parseISO(t.end);
-      if(e && toISO(e) === y && !existingRefs.has(t.id)){ data.todo.morning.push({ id: uid(), kind:'task', refId: t.id }); added.push(t.name); existingRefs.add(t.id); }
-    }); });
-    if(added.length){ saveData(); render(); showToast(`已将 ${added.length} 个昨日未完成任务加入上午`); }
-    else { showToast('昨日没有未完成的任务'); }
+    let added = 0;
+    pend.forEach(u=>{
+      const it = u && u.item; if(!it) return;
+      if(it.kind==='task'){
+        if(!getNode(it.refId)) return;          // 任务已删除：丢弃
+        if(existingRefs.has(it.refId)) return;   // 已在今日：跳过
+      }
+      if(existingIds.has(it.id)) return;          // 已在今日（重复）：跳过
+      const sec = (u.sec==='afternoon') ? 'afternoon' : 'morning';
+      data.todo[sec].push(it);
+      existingIds.add(it.id);
+      existingRefs.add(it.refId);
+      added++;
+    });
+    data.todo.yesterdayUnfinished = []; // 已处理的快照清空（重复的/失效的一并清除）
+    saveData(); render();
+    showToast(added ? `已将 ${added} 个昨日未完成任务重新加入今日待办` : '昨日未完成的任务都已在本日');
   }
   function bindTodoDrag(){
     const lists = els.todoBoard.querySelectorAll('.todo-list');
@@ -3469,6 +3577,7 @@ create policy "ppm own row" on ppm_workbench
       const task = e.target.closest('.calendar-task');
       if(task && task.dataset.task) openDetail(task.dataset.task);
     });
+    bindCompletedCalendarDrag(); // 已完成任务日历：拖动任务到其它日期调整完成日期
 
     $('scaleTabs').addEventListener('click', e=>{ const b=e.target.closest('[data-scale]'); if(b) setScale(b.dataset.scale); });
     $('prevViewBtn').addEventListener('click', ()=>navigateView(-1));
