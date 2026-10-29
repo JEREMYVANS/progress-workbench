@@ -393,6 +393,7 @@
   .detail-node .form-grid .field:nth-child(3){grid-column:4/5}
   .detail-node .form-grid .field:nth-child(4){grid-column:1/3}
   .detail-node .form-grid .field:nth-child(5){grid-column:3/5}
+  .detail-node .form-grid .date-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 14px}
   @media(max-width:760px){
     .modal{padding:18px 16px}
     .detail-node{padding:14px}
@@ -402,6 +403,7 @@
     .detail-node .form-grid .field:nth-child(3),
     .detail-node .form-grid .field:nth-child(4),
     .detail-node .form-grid .field:nth-child(5){grid-column:auto}
+    .detail-node .form-grid .date-row{grid-column:auto;grid-template-columns:1fr}
   }
   .field{display:grid;gap:6px;min-width:0}
   .field.full{grid-column:1/-1}
@@ -1182,24 +1184,28 @@ create policy "ppm own row" on ppm_workbench
     loadingData = false;
   }
   // 跨天处理：新的一天清空「今日待办」的上午/下午板块，并把其中"未完成"的项暂存到 yesterdayUnfinished，供「昨天未完成→今天」重新拉回。
-  // 注意：仅当 lastDay 已在过去（≠今天）才清空；首次运行（lastDay 为 null）只记录当天，不清空，避免误清空历史数据。
+  // 规则：同一天（lastDay===今天）不处理；其余情况（首次运行 / 跨天 / 旧数据无 lastDay）一律视为"过去的一天"，清空并快照未完成的待办。
+  // 被清空的未完成项可从「昨天未完成→今天」按钮重新拉回，不会丢失。
   function rolloverTodoDay(){
     if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[] };
     if(!Array.isArray(data.todo.morning)) data.todo.morning = [];
     if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
     if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = [];
     const today = toISO(new Date());
-    if(data.todo.lastDay === null || data.todo.lastDay === undefined){ data.todo.lastDay = today; return; } // 首次运行：仅记录，不清空
-    if(data.todo.lastDay === today) return; // 同一天：不处理
-    const unfinished = [];
-    ['morning','afternoon'].forEach(sec=>{
-      (data.todo[sec]||[]).forEach(it=>{
-        const done = (it.kind==='task') ? (()=>{ const n=getNode(it.refId); return n ? !!n.completed : true; })() : !!it.done;
-        if(!done) unfinished.push({ sec, item:it });
+    if(data.todo.lastDay === today) return; // 同一天：不处理（避免清空/丢失当天已安排的待办）
+    // 跨天 / 首次 / 旧数据：清空今日待办，并把未完成的项暂存，供「昨天未完成→今天」拉回
+    try{
+      const unfinished = [];
+      ['morning','afternoon'].forEach(sec=>{
+        (data.todo[sec]||[]).forEach(it=>{
+          let done = false;
+          try{ done = (it.kind==='task') ? (()=>{ const n=getNode(it.refId); return n ? !!n.completed : true; })() : !!it.done; }catch(_){ done = false; }
+          if(!done) unfinished.push({ sec, item:it });
+        });
       });
-    });
-    const seen = new Set((data.todo.yesterdayUnfinished||[]).map(u=>u.item && u.item.id));
-    unfinished.forEach(u=>{ if(u.item && u.item.id && !seen.has(u.item.id)){ data.todo.yesterdayUnfinished.push(u); seen.add(u.item.id); } });
+      const seen = new Set((data.todo.yesterdayUnfinished||[]).map(u=>u.item && u.item.id));
+      unfinished.forEach(u=>{ if(u.item && u.item.id && !seen.has(u.item.id)){ data.todo.yesterdayUnfinished.push(u); seen.add(u.item.id); } });
+    }catch(_){ /* 快照逻辑异常不应阻断清空 */ }
     data.todo.morning = [];
     data.todo.afternoon = [];
     data.todo.lastDay = today;
@@ -2061,7 +2067,7 @@ create policy "ppm own row" on ppm_workbench
         if(it.custom){
           return `<div class="calendar-task custom" draggable="true" data-cal-custom="${it.task.id}" title="拖动可调整完成日期 · ${escapeHTML(it.task.name)} · 今日待办·自定义">${escapeHTML(it.task.name)}<span class="cal-tag">自定义</span></div>`;
         }
-        return `<div class="calendar-task" draggable="true" data-cal-task="${it.task.id}" title="拖动可调整完成日期 · ${escapeHTML(it.task.name)}${it.pathLabel?' · '+escapeHTML(it.pathLabel):''}">${escapeHTML(it.task.name)}</div>`;
+        return `<div class="calendar-task" draggable="true" data-cal-task="${it.task.id}" title="单击查看详情 · 拖动可调整完成日期 · ${escapeHTML(it.task.name)}${it.pathLabel?' · '+escapeHTML(it.pathLabel):''}">${escapeHTML(it.task.name)}</div>`;
       }).join('');
 
       html += `<div class="calendar-cell ${inMonth?'':'other-month'} ${isToday?'today':''}" data-cal-date="${iso}" data-tasks="${dayTasks.length}">
@@ -2093,6 +2099,7 @@ create policy "ppm own row" on ppm_workbench
 
   // 已完成任务日历：拖动任务到其它日期 → 仅调整其「完成日期」（completedAt / 自定义项 doneAt）
   let calDragInfo = null;
+  let calJustDragged = false;
   function bindCompletedCalendarDrag(){
     const grid = els.completedCalendarGrid; if(!grid) return;
     grid.addEventListener('dragstart', e=>{
@@ -2103,7 +2110,13 @@ create policy "ppm own row" on ppm_workbench
       else calDragInfo = null;
       if(calDragInfo) e.dataTransfer.setData('text/plain', JSON.stringify(calDragInfo));
     });
-    grid.addEventListener('dragend', ()=>{ calDragInfo=null; grid.querySelectorAll('.calendar-cell').forEach(c=>c.classList.remove('drag-over')); });
+    grid.addEventListener('dragend', ()=>{ calDragInfo=null; calJustDragged=true; setTimeout(()=>{ calJustDragged=false; }, 60); grid.querySelectorAll('.calendar-cell').forEach(c=>c.classList.remove('drag-over')); });
+    // 单击日历里的任务 → 打开对应子任务详情（拖动不会触发 click，这里再额外加一道防护避免误触）
+    grid.addEventListener('click', e=>{
+      if(calJustDragged) return;
+      const t = e.target.closest('.calendar-task'); if(!t || !t.dataset.calTask) return;
+      openDetail(t.dataset.calTask);
+    });
     grid.addEventListener('dragover', e=>{
       const cell = e.target.closest('.calendar-cell'); if(!cell || !calDragInfo) return;
       e.preventDefault();
@@ -2218,9 +2231,11 @@ create policy "ppm own row" on ppm_workbench
       <div class="field"><label>名称</label><input id="dName" maxlength="80" placeholder="例如：厂房结构设计" value="${escapeHTML(isNew?detailDraft.name:(node.name||''))}"></div>
       <div class="field"><label>类型</label><div class="type-combo" data-combo="dType"><input id="dType" class="combo-input" autocomplete="off" value="${escapeHTML(currentType)}" placeholder="选择或输入类型"><button type="button" class="combo-toggle" tabindex="-1" aria-label="展开类型"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 6l4 4.2L12 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="combo-list" hidden></div></div></div>
       <div class="field"><label>优先级</label><select id="dPriority">${['P0','P1'].map(p=>`<option value="${p}" ${((isNew?detailDraft.priority:(node.priority||'P1'))===p)?'selected':''}>${p} ${priorityText(p)}</option>`).join('')}</select></div>
-      <div class="field"><label>开始日期</label><input type="date" id="dStart" value="${isNew?detailDraft.start:(node.start||'')}"></div>
-      <div class="field"><label>结束日期</label><input type="date" id="dEnd" value="${isNew?detailDraft.end:(node.end||'')}"></div>
-      ${ (!isNew && node.completed) ? `<div class="field"><label>完成日期</label><input type="date" id="dCompletedAt" value="${node.completedAt || ''}"><span class="field-hint">用于「已完成任务」日历归类</span></div>` : '' }
+      <div class="date-row">
+        <div class="field"><label>开始日期</label><input type="date" id="dStart" value="${isNew?detailDraft.start:(node.start||'')}"></div>
+        <div class="field"><label>结束日期</label><input type="date" id="dEnd" value="${isNew?detailDraft.end:(node.end||'')}"></div>
+        <div class="field"><label>完成日期</label><input type="date" id="dCompletedAt" value="${node?(node.completedAt||''):''}"><span class="field-hint">用于「已完成任务」日历归类</span></div>
+      </div>
     </div>`;
     if(!isNew){
       const checkText = isProject ? '标记项目已完成（自动归档）' : '标记为已完成';
@@ -2452,7 +2467,7 @@ create policy "ppm own row" on ppm_workbench
     const prio = $('dPriority'); if(prio) prio.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.priority=prio.value; else { const n=currentNode(); if(n){n.priority=prio.value; saveData(); renderRows(); renderNav();} } });
     const start = $('dStart'); if(start) start.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.start=start.value; else { const n=currentNode(); if(n){n.start=start.value; saveData(); renderRows();} } });
     const end = $('dEnd'); if(end) end.addEventListener('change', ()=>{ if(detailNewProject) detailDraft.end=end.value; else { const n=currentNode(); if(n){n.end=end.value; saveData(); renderRows();} } });
-    const completedAt = $('dCompletedAt'); if(completedAt) completedAt.addEventListener('change', ()=>{ const n=currentNode(); if(n && n.completed){ n.completedAt = completedAt.value || null; saveData(); renderCompletedCalendar(); renderRows(); renderNav(); } });
+    const completedAt = $('dCompletedAt'); if(completedAt) completedAt.addEventListener('change', ()=>{ const n=currentNode(); if(n){ n.completedAt = completedAt.value || null; saveData(); renderCompletedCalendar(); renderRows(); renderNav(); } });
     const completed = $('dCompleted'); if(completed) completed.onchange = ()=>{
       const n=currentNode(); if(!n) return;
       if(completed.checked) playCompleteFx(completed.getBoundingClientRect());
@@ -3658,6 +3673,15 @@ create policy "ppm own row" on ppm_workbench
     document.querySelectorAll('.modal-overlay.active').forEach(sm=>{ sm.classList.remove('active'); modalStack=modalStack.filter(x=>x!==sm); });
     if(!modalStack.length) document.body.classList.remove('modal-open');
     startSyncPolling();
+    // 跨天兜底：标签页长时间不关闭时，定时检测日期是否跨天，跨天则清空今日待办（与启动时 rollover 同逻辑）
+    setInterval(()=>{
+      const t = toISO(new Date());
+      if(data.todo && data.todo.lastDay !== t){
+        rolloverTodoDay();
+        saveData();
+        if(viewMode==='todo') renderTodo();
+      }
+    }, 60*1000);
     requestAnimationFrame(scrollTodayIntoView);
     hideBootSplash();
   }
