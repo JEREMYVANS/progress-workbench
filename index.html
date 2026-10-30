@@ -1175,6 +1175,7 @@ create policy "ppm own row" on ppm_workbench
     if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
     if(typeof data.todo.lastDay === 'undefined') data.todo.lastDay = null;          // 上一次打开的日期（ISO），用于跨天清空判定
     if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = []; // 跨天时被清空的「未完成」待办，等待「昨天未完成→今天」重新拉回
+    if(!Array.isArray(data.todo.doneHistory)) data.todo.doneHistory = []; // 已完成的自定义任务归档（跨天清空今日板块后仍在「已完成任务」日历保留）
     ensureProjectColors();
     normalizeTree(data.projects); // 防御：保证每棵节点都有 tasks 数组（防止手工/旧备份数据缺字段导致遍历异常）
     lastSavedAt = data._savedAt || 0;
@@ -1214,6 +1215,14 @@ create policy "ppm own row" on ppm_workbench
       const seen = new Set((data.todo.yesterdayUnfinished||[]).map(u=>u.item && u.item.id));
       unfinished.forEach(u=>{ if(u.item && u.item.id && !seen.has(u.item.id)){ data.todo.yesterdayUnfinished.push(u); seen.add(u.item.id); } });
     }catch(_){ /* 快照逻辑异常不应阻断清空 */ }
+    // 已完成的自定义任务不在项目树里、也不进「昨天未完成」快照，跨天会被清空丢失；
+    // 故先归档进 doneHistory（按 id 去重），使「已完成任务」日历长期保留它们。
+    try{
+      const hist = data.todo.doneHistory || (data.todo.doneHistory=[]);
+      ['morning','afternoon'].forEach(sec=>{
+        (data.todo[sec]||[]).forEach(it=>{ if(it && it.kind==='custom' && it.done && !hist.some(h=>h.id===it.id)) hist.push({ id:it.id, name:it.text, doneAt: it.doneAt || today }); });
+      });
+    }catch(_){ /* 归档异常不应阻断清空 */ }
     data.todo.morning = [];
     data.todo.afternoon = [];
     data.todo.lastDay = today;
@@ -2051,10 +2060,18 @@ create policy "ppm own row" on ppm_workbench
         byDate[d].push({ task:t, proj, pathLabel: buildTaskPathLabel(t, p) });
       });
     });
-    // 已完成任务日历同时纳入「今日待办」中已完成的自定义项
+    // 已完成任务日历纳入「今日待办」中已完成的自定义项：以持久归档 doneHistory 为准，
+    // 并兼容尚未归档（仍留在今日板块）的已完成自定义项，按 id 去重避免重复。
+    const archivedIds = new Set();
+    (data.todo.doneHistory||[]).forEach(h=>{
+      const d = h.doneAt || todayISO;
+      if(!byDate[d]) byDate[d]=[];
+      byDate[d].push({ task:{ id:h.id, name:h.name, custom:true }, proj:null, pathLabel:'今日待办·自定义', custom:true });
+      archivedIds.add(h.id);
+    });
     ['morning','afternoon'].forEach(sec=>{
       (data.todo[sec]||[]).forEach(it=>{
-        if(it.kind!=='custom' || !it.done) return;
+        if(it.kind!=='custom' || !it.done || archivedIds.has(it.id)) return;
         const d = it.doneAt || todayISO;
         if(!byDate[d]) byDate[d]=[];
         byDate[d].push({ task:{ id:it.id, name:it.text, custom:true }, proj:null, pathLabel:'今日待办·自定义', custom:true });
@@ -2144,10 +2161,9 @@ create policy "ppm own row" on ppm_workbench
         const node = getNode(info.id); if(!node) return;
         node.completedAt = newDate; // 仅调整完成日期，不影响计划开始/结束
       } else {
-        for(const sec of ['morning','afternoon']){
-          const it = (data.todo[sec]||[]).find(i=>i.id===info.id && i.kind==='custom');
-          if(it){ it.doneAt = newDate; break; }
-        }
+        let it = (data.todo.doneHistory||[]).find(i=>i.id===info.id);
+        if(!it){ for(const sec of ['morning','afternoon']){ it = (data.todo[sec]||[]).find(i=>i.id===info.id && i.kind==='custom'); if(it) break; } }
+        if(it) it.doneAt = newDate;
       }
       saveData(); renderCompletedCalendar(); showToast('已完成日期已调整为 ' + newDate);
     });
@@ -2852,6 +2868,7 @@ create policy "ppm own row" on ppm_workbench
   }
   function deleteTodoItem(id){
     const f = findTodoItem(id); if(!f) return;
+    if(f.item.kind==='custom'){ const hist = data.todo.doneHistory||[]; const hi = hist.findIndex(h=>h.id===id); if(hi>=0) hist.splice(hi,1); }
     data.todo[f.sec].splice(f.idx, 1);
     saveData(); render();
   }
@@ -2865,7 +2882,13 @@ create policy "ppm own row" on ppm_workbench
       if(willDone){ const cb = els.todoBoard.querySelector(`[data-todo-check="${id}"]`); if(cb){ const rect = cb.getBoundingClientRect(); playCompleteFx(rect); } }
       setCompletedCascade(it.refId, willDone);
       render();
-    } else { it.done = !it.done; if(it.done) it.doneAt = todayISO; saveData(); render(); }
+    } else {
+      it.done = !it.done;
+      const hist = data.todo.doneHistory || (data.todo.doneHistory=[]);
+      if(it.done){ it.doneAt = todayISO; if(!hist.some(h=>h.id===it.id)) hist.push({ id:it.id, name:it.text, doneAt: todayISO }); }
+      else { const hi = hist.findIndex(h=>h.id===it.id); if(hi>=0) hist.splice(hi,1); }
+      saveData(); render();
+    }
   }
   function importYesterdayUnfinished(){
     if(!data.todo) data.todo = {morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[]};
