@@ -1175,17 +1175,16 @@ create policy "ppm own row" on ppm_workbench
     if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
     if(typeof data.todo.lastDay === 'undefined') data.todo.lastDay = null;          // 上一次打开的日期（ISO），用于跨天清空判定
     if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = []; // 跨天时被清空的「未完成」待办，等待「昨天未完成→今天」重新拉回
-    // 一次性迁移（_r2 标记）：旧版本"首次运行只记 lastDay 不清空"会让 lastDay 被写成"今天"却残留昨天的待办，
-    // 导致跨天不清空。这里在拉云之前强制清空一次，遗留的未完成项（含自定义）会进入快照，可从「昨天未完成→今天」拉回。
-    if(data.todo._r2 !== '1'){ rolloverTodoDay(); }
     ensureProjectColors();
     normalizeTree(data.projects); // 防御：保证每棵节点都有 tasks 数组（防止手工/旧备份数据缺字段导致遍历异常）
     lastSavedAt = data._savedAt || 0;
     if(syncCfg.enabled){ loadSbAuth(); if(sbAuthed()) await pullRemote(true); } // 启动拉取云端（含登录凭据自动续期）
-    const _lastBefore = data.todo.lastDay;
-    rolloverTodoDay(); // 跨天：把昨日未完成的待办快照后清空今日板块
-    const _rolled = (_lastBefore !== data.todo.lastDay); // 是否真的发生了跨天清空
-    data.todo._r2 = '1'; // 标记迁移完成，避免每次启动重复强制清空
+    // 跨天/迁移：必须在「拉云之后」处理。否则云端残留的旧待办板块会把刚清空的板子覆盖回去（轮询也会反复拉回）。
+    // 旧版本（_r2='1'）曾把 lastDay 误写为"今天"却从未真正清空，导致板块残留昨天的任务；这里用新标记 '_r2'==='2' 强制清空一次，
+    // 遗留的未完成项（含自定义）会进入快照，可从「昨天未完成→今天」拉回。
+    let _rolled = false;
+    if(data.todo._r2 !== '2'){ _rolled = rolloverTodoDay(true); data.todo._r2 = '2'; }
+    else { _rolled = rolloverTodoDay(false); } // 常规跨天清空（同一天不处理）
     saveData(true, true); // 启动时只写本地且不刷新时间戳，避免"未修改的启动"显得比云端新
     // 跨天清空后必须把"已清空"的待办同步到云端：否则云端仍是旧待办，下一次轮询拉取会把它们覆盖回来（板子又变满）。
     if(_rolled && syncCfg.enabled && sbAuthed()){ try{ pushRemote(); }catch(e){} }
@@ -1194,14 +1193,15 @@ create policy "ppm own row" on ppm_workbench
   // 跨天处理：新的一天清空「今日待办」的上午/下午板块，并把其中"未完成"的项暂存到 yesterdayUnfinished，供「昨天未完成→今天」重新拉回。
   // 规则：同一天（lastDay===今天）不处理；其余情况（首次运行 / 跨天 / 旧数据无 lastDay）一律视为"过去的一天"，清空并快照未完成的待办。
   // 被清空的未完成项可从「昨天未完成→今天」按钮重新拉回，不会丢失。
-  function rolloverTodoDay(){
+  // force=true 时无视「lastDay===今天」守卫，强制清空（用于一次性迁移：旧版本曾把 lastDay 误写为"今天"却未清空，导致板块残留昨天的任务）
+  function rolloverTodoDay(force){
     if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[] };
     if(!Array.isArray(data.todo.morning)) data.todo.morning = [];
     if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
     if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = [];
     const today = toISO(new Date());
-    if(data.todo.lastDay === today) return; // 同一天：不处理（避免清空/丢失当天已安排的待办）
-    // 跨天 / 首次 / 旧数据：清空今日待办，并把未完成的项暂存，供「昨天未完成→今天」拉回
+    if(!force && data.todo.lastDay === today) return false; // 同一天：不处理（避免清空/丢失当天已安排的待办）
+    // 跨天 / 首次 / 旧数据 / 强制迁移：清空今日待办，并把未完成的项暂存，供「昨天未完成→今天」拉回
     try{
       const unfinished = [];
       ['morning','afternoon'].forEach(sec=>{
@@ -1217,6 +1217,7 @@ create policy "ppm own row" on ppm_workbench
     data.todo.morning = [];
     data.todo.afternoon = [];
     data.todo.lastDay = today;
+    return true; // 表示本次确实执行了清空
   }
   // 设备标识：每台设备/每个浏览器入口生成一次，用于多端同步诊断
   const deviceId = (()=>{ try{ let d=localStorage.getItem(LS_KEY+'_dev'); if(!d){ d='dev-'+uid(); localStorage.setItem(LS_KEY+'_dev', d); } return d; }catch(e){ return 'dev-local'; } })();
@@ -1398,6 +1399,9 @@ create policy "ppm own row" on ppm_workbench
         if(!data.todayManual && _prevManual) data.todayManual = _prevManual;
         Object.keys(_prevLocal).forEach(k=>{ if(!Array.isArray(data[k]) && Array.isArray(_prevLocal[k])) data[k] = _prevLocal[k]; });
         if(!data.todo || typeof data.todo!=='object' || !Array.isArray(data.todo.morning) || !Array.isArray(data.todo.afternoon)) data.todo = _prevLocal.todo; // 云端旧版本未带 todo 时保留本地
+        // 今日待办板块以本地为准：一旦本地已建立过今日板块（lastDay 非空），云端残留的旧板块绝不覆盖，
+        // 否则会把「已清空」的板子反复拉回昨天的任务。仅在本地从未建立过板块（lastDay 为空，如新设备首次同步）时才从云端接纳。
+        if(_prevLocal.todo && _prevLocal.todo.lastDay){ data.todo = _prevLocal.todo; }
         ensureProjectColors(); // 云端拉回旧颜色后，强制按当前项目顺序重新分配黄金角色相
         try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){}
         render(); updateSyncBtn();
