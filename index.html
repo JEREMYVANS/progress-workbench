@@ -1532,7 +1532,7 @@ create policy "ppm own row" on ppm_workbench
     return task.completed ? 1 : 0;
   }
   function currentStage(project){ return childCountText(project); }
-  function isArchived(p){ return p.completed || calcProgress(p)>=1; }
+  function isArchived(p){ return !!p.completed; }
   function toRgb(c){
     if(typeof c==='string' && c.indexOf('hsl')===0){
       const m = c.match(/hsl\(([\d.]+)[ ,]+([\d.]+)%[ ,]+([\d.]+)%/);
@@ -1644,20 +1644,11 @@ create policy "ppm own row" on ppm_workbench
     const path=findNodePath(id); if(!path) return;
     path.slice(0,-1).forEach(ancestorId=>{ const n=getNode(ancestorId); if(n){ n.completed=false; n.completedAt=null; } });
   }
-  function autoCompleteAncestors(id){
-    const path=findNodePath(id); if(!path || path.length<2) return;
-    for(let i=path.length-2;i>=0;i--){
-      const n=getNode(path[i]); if(!n || !n.tasks || !n.tasks.length) continue;
-      const all = n.tasks.every(c=>c.completed);
-      n.completed = all;
-      if(all) n.completedAt = todayISO;
-    }
-  }
   function setCompletedCascade(id, checked){
     const node=getNode(id); if(!node) return;
     node.completed=checked;
     node.completedAt = checked ? todayISO : null;
-    if(checked){ markDescendantsCompleted(node,true); autoCompleteAncestors(id); }
+    if(checked){ markDescendantsCompleted(node,true); }
     else { markDescendantsCompleted(node,false); uncheckAncestors(id); }
     saveData();
   }
@@ -2691,7 +2682,7 @@ create policy "ppm own row" on ppm_workbench
 
   function renderArchived(){
     const archived = sortProjects(data.projects.filter(isArchived));
-    if(!archived.length){ els.archivedBody.innerHTML='<div class="empty-state"><span class="empty-state-mark">✓</span><strong>暂无已归档项目</strong><p>完成全部子任务的项目会自动归档到这里。</p></div>'; return; }
+    if(!archived.length){ els.archivedBody.innerHTML='<div class="empty-state"><span class="empty-state-mark">✓</span><strong>暂无已归档项目</strong><p>已勾选完成的项目会自动归档到这里。</p></div>'; return; }
     els.archivedBody.innerHTML = archived.map(p=>{
       const at = p.completedAt ? formatDate(p.completedAt) : '—';
       return `<div class="project-list-item archived" data-open-archived="${p.id}" style="--bar-color:${p.color||COLORS[0]}">
