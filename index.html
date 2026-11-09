@@ -1418,6 +1418,32 @@ create policy "ppm own row" on ppm_workbench
       pushRemote.running = false;
     }
   }
+  // 今日待办的跨设备合并：
+  //  - 当日板块（morning/afternoon）是各设备本地的“今日工作集”，跨天会自动清空，故不跨设备覆盖
+  //    （否则会把“已清空”的板子反复拉回昨天的任务）；仅当本地从未建立过板块（lastDay 为空，新设备首次同步）时才从云端接纳。
+  //  - 持久化集合（doneHistory 已完成的自定义任务、yesterdayUnfinished 跨天未完成的快照）需跨设备共享，按 id 并集合并，
+  //    这样在 A 设备完成/产生的自定义待办，在 B 设备也能看到，不会互相覆盖丢失。
+  function mergeTodo(local, cloud){
+    local = (local && typeof local==='object') ? local : {};
+    cloud = (cloud && typeof cloud==='object') ? cloud : {};
+    const localEstablished = !!local.lastDay; // 本地已建立过今日板块（非首次同步）→ 当日板块以本地为准
+    const morning = localEstablished ? (local.morning||[]) : (cloud.morning||[]);
+    const afternoon = localEstablished ? (local.afternoon||[]) : (cloud.afternoon||[]);
+    return {
+      morning: Array.isArray(morning) ? morning : [],
+      afternoon: Array.isArray(afternoon) ? afternoon : [],
+      lastDay: local.lastDay || cloud.lastDay || null,
+      yesterdayUnfinished: unionTodo(local.yesterdayUnfinished, cloud.yesterdayUnfinished, u=>u && u.item && u.item.id),
+      doneHistory: unionTodo(local.doneHistory, cloud.doneHistory, h=>h && h.id),
+      _r2: local._r2 || cloud._r2 || null
+    };
+  }
+  function unionTodo(a, b, keyFn){
+    const out = []; const seen = new Set();
+    const add = x=>{ if(x==null) return; const k = keyFn(x); if(k==null || seen.has(k)) return; seen.add(k); out.push(x); };
+    (a||[]).forEach(add); (b||[]).forEach(add);
+    return out;
+  }
   async function pullRemote(silent, force){
     if(!sbAuthed()){ if(!(await trySilentReauth())) return; }
     if(pullRemote.running) return;   // 防止轮询/事件并发拉取叠加
@@ -1465,11 +1491,9 @@ create policy "ppm own row" on ppm_workbench
         data = remote; normalizeTypes(data.projects, true); lastSavedAt = data._savedAt || Date.now();
         if(!data.todaySort && _prevSort) data.todaySort = _prevSort;
         if(!data.todayManual && _prevManual) data.todayManual = _prevManual;
-        Object.keys(_prevLocal).forEach(k=>{ if(!Array.isArray(data[k]) && Array.isArray(_prevLocal[k])) data[k] = _prevLocal[k]; });
+        Object.keys(_prevLocal).forEach(k=>{ if(k==='todo') return; if(!Array.isArray(data[k]) && Array.isArray(_prevLocal[k])) data[k] = _prevLocal[k]; });
         if(!data.todo || typeof data.todo!=='object' || !Array.isArray(data.todo.morning) || !Array.isArray(data.todo.afternoon)) data.todo = _prevLocal.todo; // 云端旧版本未带 todo 时保留本地
-        // 今日待办板块以本地为准：一旦本地已建立过今日板块（lastDay 非空），云端残留的旧板块绝不覆盖，
-        // 否则会把「已清空」的板子反复拉回昨天的任务。仅在本地从未建立过板块（lastDay 为空，如新设备首次同步）时才从云端接纳。
-        if(_prevLocal.todo && _prevLocal.todo.lastDay){ data.todo = _prevLocal.todo; }
+        else data.todo = mergeTodo(_prevLocal.todo, data.todo); // 持久化待办跨设备合并；当日板块保持本地（避免跨天清空被覆盖）
         ensureProjectColors(); // 云端拉回旧颜色后，强制按当前项目顺序重新分配黄金角色相
         try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){}
         render(); updateSyncBtn();
@@ -1480,6 +1504,8 @@ create policy "ppm own row" on ppm_workbench
         syncLog.lastError = '';
       } else {
         syncLog.lastPull = new Date().toLocaleString('zh-CN',{hour12:false}) + '（已是最新）';
+        // 即使本地较新，也要把云端持久化的待办（已完成自定义任务 / 跨天未完成）并入本地，避免丢失其它设备产生的内容
+        if(remote && remote.todo) data.todo = mergeTodo(data.todo, remote.todo);
         // 本地比云端新（如某次推送未成功落库）：把本地修复推回云端，避免下次拉取又把本地旧版本拉回来
         if(sbAuthed() && remote && (data._savedAt||0) > (remote._savedAt||0) + 2000 && !pushRemote.running){
           setTimeout(()=>{ if(sbAuthed() && !pushRemote.running) pushRemote(); }, 800);
