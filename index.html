@@ -1105,6 +1105,14 @@ create policy "ppm own row" on ppm_workbench
   function dateSerial(d){ return Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000; }
   function daysBetween(a,b){ return Math.round(dateSerial(b)-dateSerial(a)); }
   function addDays(d,n){ const base = (d instanceof Date) ? d : parseISO(d); const x=new Date(base.getFullYear(),base.getMonth(),base.getDate()); x.setDate(x.getDate()+n); return x; }
+  // 待办跨天基准：钉死 Asia/Shanghai，避免不同设备系统时区/时钟不一致导致提前或延后跨天
+  function todoToday(){
+    try{
+      const p = new Intl.DateTimeFormat('en-CA',{ timeZone:'Asia/Shanghai', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+      if(/^\d{4}-\d{2}-\d{2}$/.test(p)) return p;
+    }catch(e){}
+    return toISO(new Date());
+  }
   // 全局 iso 偏移助手：相对今天返回 ISO 日期；loadDemo 内部另有同名局部变量，此处供 ovCommitQuickAdd 等全局调用
   function iso(n){ return toISO(addDays(todayDate, n)); }
   function daysInMonth(y,m){ return new Date(y,m+1,0).getDate(); }
@@ -1201,7 +1209,7 @@ create policy "ppm own row" on ppm_workbench
     if(!Array.isArray(data.todo.morning)) data.todo.morning = [];
     if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
     if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = [];
-    const today = toISO(new Date());
+    const today = todoToday();
     if(!force && data.todo.lastDay === today) return false; // 同一天：不处理（避免清空/丢失当天已安排的待办）
     // 跨天 / 首次 / 旧数据 / 强制迁移：清空今日待办，并把未完成的项暂存，供「昨天未完成→今天」拉回
     try{
@@ -1419,24 +1427,68 @@ create policy "ppm own row" on ppm_workbench
     }
   }
   // 今日待办的跨设备合并：
-  //  - 当日板块（morning/afternoon）是各设备本地的“今日工作集”，跨天会自动清空，故不跨设备覆盖
-  //    （否则会把“已清空”的板子反复拉回昨天的任务）；仅当本地从未建立过板块（lastDay 为空，新设备首次同步）时才从云端接纳。
-  //  - 持久化集合（doneHistory 已完成的自定义任务、yesterdayUnfinished 跨天未完成的快照）需跨设备共享，按 id 并集合并，
-  //    这样在 A 设备完成/产生的自定义待办，在 B 设备也能看到，不会互相覆盖丢失。
+  //  - 当日上午/下午板子改为「按 item id 并集合并」（共享板）：A 设备加的待办，B 设备也能直接看到，不会互相覆盖丢失。
+  //  - 持久化集合（doneHistory 已完成的自定义任务、yesterdayUnfinished 跨天未完成的快照）按 id 并集合并，
+  //    这样在 A 设备完成/产生的自定义待办，在 B 设备也能看到。
+  //  - lastDay 以云端为唯一基准，跨天由首个发现新一天的设备统一清空并推云，其余设备拉到 lastDay===今天 即跳过。
   function mergeTodo(local, cloud){
     local = (local && typeof local==='object') ? local : {};
     cloud = (cloud && typeof cloud==='object') ? cloud : {};
-    const localEstablished = !!local.lastDay; // 本地已建立过今日板块（非首次同步）→ 当日板块以本地为准
-    const morning = localEstablished ? (local.morning||[]) : (cloud.morning||[]);
-    const afternoon = localEstablished ? (local.afternoon||[]) : (cloud.afternoon||[]);
+    const localDay = local.lastDay || null;
+    const cloudDay = cloud.lastDay || null;
+    const sameDay = !!(localDay && cloudDay && localDay === cloudDay);
+    const cloudHasBoard = Array.isArray(cloud.morning) && Array.isArray(cloud.afternoon) && !!cloudDay;
+    let morning, afternoon;
+    if(sameDay){
+      // 同一天：双方各自新增的待办都保留（按 id 并集）
+      morning = unionTodo(local.morning, cloud.morning, it=>it && it.id);
+      afternoon = unionTodo(local.afternoon, cloud.afternoon, it=>it && it.id);
+    } else if(cloudHasBoard){
+      // 天数不一致且云端有当天有效板子：以云端当天板子为准（避免把"已跨天清空"的板子又拉回昨天任务）
+      morning = cloud.morning; afternoon = cloud.afternoon;
+    } else {
+      // 云端没有有效板子：保留本地板子（首同步/云端缺字段时不丢本地）
+      morning = Array.isArray(local.morning) ? local.morning : [];
+      afternoon = Array.isArray(local.afternoon) ? local.afternoon : [];
+    }
+    let yesterdayUnfinished = unionTodo(local.yesterdayUnfinished, cloud.yesterdayUnfinished, u=>u && u.item && u.item.id);
+    let doneHistory = unionTodo(local.doneHistory, cloud.doneHistory, h=>h && h.id);
+    if(!sameDay){
+      // 离线跨午夜兜底：本地板子里「未同步」的未完成项不能丢，快照进 yesterdayUnfinished；已完成自定义项归档进 doneHistory
+      const t = todoToday();
+      const seen = new Set(yesterdayUnfinished.map(u=>u && u.item && u.item.id));
+      const snap = [];
+      ['morning','afternoon'].forEach(sec=>{
+        (local[sec]||[]).forEach(it=>{
+          let done=false;
+          try{ done = (it.kind==='task') ? (()=>{ const n=getNode(it.refId); return n ? !!n.completed : true; })() : !!it.done; }catch(_){ done=false; }
+          if(!done) snap.push({ sec, item: it });
+        });
+      });
+      snap.forEach(u=>{ if(u.item && u.item.id && !seen.has(u.item.id)){ yesterdayUnfinished.push(u); seen.add(u.item.id); } });
+      (local.morning||[]).concat(local.afternoon||[]).forEach(it=>{ if(it && it.kind==='custom' && it.done && !doneHistory.some(h=>h.id===it.id)) doneHistory.push({ id:it.id, name:it.text, doneAt: it.doneAt || localDay || t }); });
+    }
     return {
       morning: Array.isArray(morning) ? morning : [],
       afternoon: Array.isArray(afternoon) ? afternoon : [],
-      lastDay: local.lastDay || cloud.lastDay || null,
-      yesterdayUnfinished: unionTodo(local.yesterdayUnfinished, cloud.yesterdayUnfinished, u=>u && u.item && u.item.id),
-      doneHistory: unionTodo(local.doneHistory, cloud.doneHistory, h=>h && h.id),
+      lastDay: cloudDay || localDay || null,
+      yesterdayUnfinished, doneHistory,
       _r2: local._r2 || cloud._r2 || null
     };
+  }
+  // 比较两份 todo 的四个集合是否按 id 一致（用于判断合并后本地是否向云端贡献了新内容）
+  function todoEqual(a, b){
+    if(!a || !b) return a === b;
+    const keys = ['morning','afternoon','yesterdayUnfinished','doneHistory'];
+    for(const k of keys){
+      const x = a[k]||[], y = b[k]||[];
+      if(x.length !== y.length) return false;
+      const idOf = it => it && (it.id || (it.item && it.item.id));
+      const xs = new Set(x.map(idOf)), ys = new Set(y.map(idOf));
+      for(const id of xs) if(!ys.has(id)) return false;
+      for(const id of ys) if(!xs.has(id)) return false;
+    }
+    return true;
   }
   function unionTodo(a, b, keyFn){
     const out = []; const seen = new Set();
@@ -1493,7 +1545,13 @@ create policy "ppm own row" on ppm_workbench
         if(!data.todayManual && _prevManual) data.todayManual = _prevManual;
         Object.keys(_prevLocal).forEach(k=>{ if(k==='todo') return; if(!Array.isArray(data[k]) && Array.isArray(_prevLocal[k])) data[k] = _prevLocal[k]; });
         if(!data.todo || typeof data.todo!=='object' || !Array.isArray(data.todo.morning) || !Array.isArray(data.todo.afternoon)) data.todo = _prevLocal.todo; // 云端旧版本未带 todo 时保留本地
-        else data.todo = mergeTodo(_prevLocal.todo, data.todo); // 持久化待办跨设备合并；当日板块保持本地（避免跨天清空被覆盖）
+        const _cloudTodo = remote.todo;
+        data.todo = mergeTodo(_prevLocal.todo, data.todo); // 共享板按 id 并集合并；lastDay 以云端为准
+        // 合并后若本地贡献了云端没有的内容（待办板/已完成/未完成），必须把合并结果推回云端，否则其它设备看不到
+        if(!todoEqual(data.todo, _cloudTodo)){
+          data._savedAt = Date.now(); lastSavedAt = data._savedAt;
+          setTimeout(()=>{ if(sbAuthed() && !pushRemote.running) pushRemote(); }, 600);
+        }
         ensureProjectColors(); // 云端拉回旧颜色后，强制按当前项目顺序重新分配黄金角色相
         try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){}
         render(); updateSyncBtn();
@@ -3790,7 +3848,7 @@ create policy "ppm own row" on ppm_workbench
     startSyncPolling();
     // 跨天兜底：标签页长时间不关闭时，定时检测日期是否跨天，跨天则清空今日待办（与启动时 rollover 同逻辑）
     setInterval(()=>{
-      const t = toISO(new Date());
+      const t = todoToday();
       if(data.todo && data.todo.lastDay !== t){
         rolloverTodoDay();
         saveData();
