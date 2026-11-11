@@ -622,6 +622,23 @@
   .todo-kind-task{border-left:3px solid var(--olive)}
   .todo-kind-custom{border-left:3px solid transparent;border-style:dashed}
   .todo-dangling{opacity:.6}
+  /* 今日待办 · 快速添加框（虚线） */
+  .todo-quickadd{display:flex;gap:8px;align-items:center;padding:12px;border:1.5px dashed var(--line-strong);border-radius:14px;background:var(--panel2);margin-bottom:14px;transition:border-color .15s,background .15s}
+  .todo-quickadd:focus-within{border-color:var(--olive);background:var(--panel)}
+  .todo-quickadd-input{flex:1;height:38px;padding:0 14px;border:0.5px solid var(--line-strong);border-radius:11px;background:var(--panel);color:var(--text);font-size:14px;outline:none}
+  .todo-quickadd-input:focus{border-color:var(--olive);box-shadow:0 0 0 3px rgba(94,92,230,.15)}
+  .todo-pick-btn{flex:none}
+  /* 今日待办 · 已完成分组 */
+  .todo-done-section{margin-top:18px;padding-top:14px;border-top:1px solid rgba(0,0,0,.08)}
+  html[data-theme="dark"] .todo-done-section{border-top-color:rgba(255,255,255,.1)}
+  .todo-done-head{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.02em;margin-bottom:8px}
+  .todo-done-head .count{background:var(--panel2);border-radius:8px;padding:1px 8px;font-size:11px;font-weight:600}
+  .todo-done-list .todo-item{opacity:.8}
+  .todo-done-list .todo-drag{display:none}
+  /* 今日待办 · 行内改名 */
+  .todo-name[data-todo-editable]{cursor:text}
+  .todo-name[data-todo-editable]:hover{text-decoration:underline dotted var(--line-strong)}
+  .todo-edit-input{flex:1;min-width:0;font-size:13.5px;font-weight:600;padding:4px 8px;border:0.5px solid var(--olive);border-radius:8px;background:var(--panel);color:var(--text);outline:none}
   .todo-composer{border-top:0.5px solid var(--line);padding:12px 14px;background:var(--panel);display:flex;flex-direction:column;gap:10px}
   .todo-composer-tabs{display:flex;gap:6px}
   .todo-tab{border:0.5px solid var(--line-strong);background:var(--panel2);color:var(--muted);font-size:12.5px;font-weight:600;padding:5px 12px;border-radius:8px;cursor:pointer;transition:all .12s}
@@ -1185,6 +1202,7 @@ create policy "ppm own row" on ppm_workbench
     if(typeof data.todo.lastDay === 'undefined') data.todo.lastDay = null;          // 上一次打开的日期（ISO），用于跨天清空判定
     if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = []; // 跨天时被清空的「未完成」待办，等待「昨天未完成→今天」重新拉回
     if(!Array.isArray(data.todo.doneHistory)) data.todo.doneHistory = []; // 已完成的自定义任务归档（跨天清空今日板块后仍在「已完成任务」日历保留）
+    if(!Array.isArray(data.todo.deletedIds)) data.todo.deletedIds = []; // 已删除的待办 id（随同步合并，使删除能在多设备真正生效）
     ensureProjectColors();
     normalizeTree(data.projects); // 防御：保证每棵节点都有 tasks 数组（防止手工/旧备份数据缺字段导致遍历异常）
     lastSavedAt = data._savedAt || 0;
@@ -1216,6 +1234,7 @@ create policy "ppm own row" on ppm_workbench
       const unfinished = [];
       ['morning','afternoon'].forEach(sec=>{
         (data.todo[sec]||[]).forEach(it=>{
+          if(data.todo.deletedIds && data.todo.deletedIds.indexOf(it.id)>=0) return; // 已删除：不快照
           let done = false;
           try{ done = (it.kind==='task') ? (()=>{ const n=getNode(it.refId); return n ? !!n.completed : true; })() : !!it.done; }catch(_){ done = false; }
           if(!done) unfinished.push({ sec, item:it });
@@ -1437,6 +1456,9 @@ create policy "ppm own row" on ppm_workbench
     const localDay = local.lastDay || null;
     const cloudDay = cloud.lastDay || null;
     const sameDay = !!(localDay && cloudDay && localDay === cloudDay);
+    // 已删除清单：按 id 并集（使任一设备上的删除能跨设备生效）
+    const deletedIds = unionTodo(local.deletedIds, cloud.deletedIds, x=>x);
+    const isDel = id => deletedIds.indexOf(id) >= 0;
     const cloudHasBoard = Array.isArray(cloud.morning) && Array.isArray(cloud.afternoon) && !!cloudDay;
     let morning, afternoon;
     if(sameDay){
@@ -1468,11 +1490,15 @@ create policy "ppm own row" on ppm_workbench
       snap.forEach(u=>{ if(u.item && u.item.id && !seen.has(u.item.id)){ yesterdayUnfinished.push(u); seen.add(u.item.id); } });
       (local.morning||[]).concat(local.afternoon||[]).forEach(it=>{ if(it && it.kind==='custom' && it.done && !doneHistory.some(h=>h.id===it.id)) doneHistory.push({ id:it.id, name:it.text, doneAt: it.doneAt || localDay || t }); });
     }
+    // 过滤掉任一设备已删除的项（板子 / 昨天未完成 / 已完成归档），使删除跨设备真正生效
+    morning = (Array.isArray(morning)?morning:[]).filter(it=>!(it && isDel(it.id)));
+    afternoon = (Array.isArray(afternoon)?afternoon:[]).filter(it=>!(it && isDel(it.id)));
+    yesterdayUnfinished = yesterdayUnfinished.filter(u=>!(u && u.item && isDel(u.item.id)));
+    doneHistory = doneHistory.filter(h=>!(h && isDel(h.id)));
     return {
-      morning: Array.isArray(morning) ? morning : [],
-      afternoon: Array.isArray(afternoon) ? afternoon : [],
+      morning, afternoon,
       lastDay: cloudDay || localDay || null,
-      yesterdayUnfinished, doneHistory,
+      yesterdayUnfinished, doneHistory, deletedIds,
       _r2: local._r2 || cloud._r2 || null
     };
   }
@@ -2841,9 +2867,11 @@ create policy "ppm own row" on ppm_workbench
     const names = findNodePath(id).map(x => { const n = (x===proj.id) ? proj : getNode(x, [proj]); return n ? n.name : ''; }).slice(0, -1);
     return names.length > 1 ? names.join(' / ') : (names[0] || proj.name);
   }
+  function isTodoDone(it){ return it.kind==='task' ? !!(getNode(it.refId) && getNode(it.refId).completed) : !!it.done; }
   function renderTodo(){
     if(!els.todoBoard) return;
-    if(!data.todo || typeof data.todo!=='object' || !Array.isArray(data.todo.morning) || !Array.isArray(data.todo.afternoon)) data.todo = { morning:[], afternoon:[] };
+    if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[], doneHistory:[], deletedIds:[] };
+    ['morning','afternoon','yesterdayUnfinished','doneHistory','deletedIds'].forEach(k=>{ if(!Array.isArray(data.todo[k])) data.todo[k]=[]; });
     const wk = els.todoBoard.querySelector('#todoWeekday'); if(wk) wk.textContent = '今天 · ' + weekNames[todayDate.getDay()];
     const tx = els.todoBoard.querySelector('#todoText'); if(tx) tx.textContent = (todayDate.getMonth()+1) + '月' + todayDate.getDate() + '日';
     // 「昨天未完成 → 今天」按钮：根据待导入数量显示徽标并禁用/启用
@@ -2855,23 +2883,32 @@ create policy "ppm own row" on ppm_workbench
       ib.classList.toggle('is-disabled', !pend);
     }
     const body = els.todoBoard.querySelector('#todoBody'); if(!body) return;
-    body.innerHTML = ['morning','afternoon'].map(sec => todoSectionHTML(sec)).join('');
+    const delSet = data.todo.deletedIds || [];
+    const all = (data.todo.morning||[]).concat(data.todo.afternoon||[]).filter(it=>it && delSet.indexOf(it.id)<0);
+    const active = all.filter(it=>!isTodoDone(it));
+    const doneList = all.filter(it=>isTodoDone(it));
+    body.innerHTML =
+      quickAddHTML() +
+      `<div class="todo-list" data-todo-list="all">` +
+        (active.length ? active.map(it=>todoItemHTML(it, true)).join('') : '<div class="todo-empty">暂无待办，在上方输入框直接添加，或点「选择已有任务」</div>') +
+      `</div>` +
+      doneSectionHTML(doneList);
     bindTodo();
   }
-  function todoSectionHTML(sec){
-    const label = sec==='morning' ? '上午' : '下午';
-    const icon = sec==='morning' ? '🌅' : '🌇';
-    const items = (data.todo[sec]||[]).map(it => todoItemHTML(it, sec)).join('');
-    const count = (data.todo[sec]||[]).length;
-    return `<div class="todo-section" data-section="${sec}">
-      <div class="todo-section-head">
-        <div class="todo-section-title"><span class="todo-section-icon">${icon}</span>${label}<span class="count">${count}</span></div>
-        <button type="button" class="todo-add-btn" data-todo-add="${sec}">＋ 添加</button>
-      </div>
-      <div class="todo-list" data-todo-list="${sec}">${items || '<div class="todo-empty">暂无待办，点「＋ 添加」开始规划</div>'}</div>
+  function quickAddHTML(){
+    return `<div class="todo-quickadd">
+      <input type="text" class="todo-quickadd-input" data-todo-quickadd placeholder="输入待办，回车添加…" aria-label="快速添加待办">
+      <button type="button" class="btn small todo-pick-btn" data-todo-pick>选择已有任务</button>
     </div>`;
   }
-  function todoItemHTML(it, sec){
+  function doneSectionHTML(doneList){
+    if(!doneList.length) return '';
+    return `<div class="todo-done-section">
+      <div class="todo-done-head">已完成 <span class="count">${doneList.length}</span></div>
+      <div class="todo-list todo-done-list">${doneList.map(it=>todoItemHTML(it, false)).join('')}</div>
+    </div>`;
+  }
+  function todoItemHTML(it, drag){
     let name='', sub='', kindClass='', done=false;
     if(it.kind==='task'){
       const node = getNode(it.refId);
@@ -2879,21 +2916,21 @@ create policy "ppm own row" on ppm_workbench
       else { done = !!node.completed; name = node.name; const path = taskPathLabel(it.refId); sub = `<span class="todo-tag todo-tag-task">任务</span> ${escapeHTML(path||'')}`; kindClass='todo-kind-task'; }
     } else { done = !!it.done; name = it.text||''; sub = '<span class="todo-tag todo-tag-custom">自定义</span>'; kindClass='todo-kind-custom'; }
     const checked = done ? 'checked' : '';
-    return `<div class="todo-item ${kindClass}${done?' done':''}" data-todo-id="${it.id}" draggable="true">
+    const editable = (it.kind==='custom') ? ' data-todo-editable="1"' : '';
+    return `<div class="todo-item ${kindClass}${done?' done':''}" data-todo-id="${it.id}" draggable="${drag===false?'false':'true'}">
       <span class="todo-drag" title="拖动排序" aria-hidden="true">⠿</span>
       <input type="checkbox" class="todo-check" data-todo-check="${it.id}" ${checked} aria-label="完成 ${escapeHTML(name)}">
-      <div class="todo-main"><div class="todo-name">${escapeHTML(name)}</div><div class="todo-sub">${sub}</div></div>
+      <div class="todo-main"><div class="todo-name"${editable}>${escapeHTML(name)}</div><div class="todo-sub">${sub}</div></div>
       <button type="button" class="todo-del" data-todo-del="${it.id}" title="删除" aria-label="删除">×</button>
     </div>`;
   }
   /* 选择任务弹窗：弹出项目总览，勾选的任务加入目标板块 */
-  function openTodoPicker(sec){
-    todoPickerSec = sec;
-    const label = sec==='morning' ? '上午' : '下午';
-    const lbl = els.todoPickerModal.querySelector('#todoPickerSecLabel'); if(lbl) lbl.textContent = '加入「' + label + '」板块';
+  function openTodoPicker(){
+    todoPickerSec = 'morning'; // 单一列表：所有待办统一归入 morning 桶（界面已合并展示）
+    const lbl = els.todoPickerModal.querySelector('#todoPickerSecLabel'); if(lbl) lbl.textContent = '加入今日待办';
     setTodoPickerTab('tree');
     const search = els.todoPickerModal.querySelector('[data-tp-search]'); if(search) search.value='';
-    renderTodoPickerTree(sec, '');
+    renderTodoPickerTree('morning', '');
     updateTodoPickerCount();
     openModal(els.todoPickerModal);
     if(search) setTimeout(()=>search.focus(), 50);
@@ -2945,7 +2982,7 @@ create policy "ppm own row" on ppm_workbench
     const el = els.todoPickerModal.querySelector('[data-tp-count]');
     if(!el) return;
     const n = todoPickerSec ? (data.todo[todoPickerSec]||[]).length : 0;
-    el.textContent = '本板块已选 ' + n + ' 项';
+    el.textContent = '今日待办已选 ' + n + ' 项';
   }
   function bindTodoPicker(){
     const m = els.todoPickerModal; if(!m || m.dataset.bound) return; m.dataset.bound='1';
@@ -2973,10 +3010,14 @@ create policy "ppm own row" on ppm_workbench
   function bindTodo(){
     if(!els.todoBoard) return;
     if(els.todoImportBtn && !els.todoImportBtn.dataset.bound){ els.todoImportBtn.dataset.bound='1'; els.todoImportBtn.addEventListener('click', ()=>importYesterdayUnfinished()); }
-    els.todoBoard.querySelectorAll('[data-todo-add]').forEach(b=>b.addEventListener('click', ()=>openTodoPicker(b.dataset.todoAdd)));
+    const qa = els.todoBoard.querySelector('[data-todo-quickadd]');
+    if(qa) qa.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); commitQuickAdd(qa); } });
+    const pickBtn = els.todoBoard.querySelector('[data-todo-pick]');
+    if(pickBtn) pickBtn.addEventListener('click', ()=>openTodoPicker());
     els.todoBoard.querySelectorAll('[data-todo-check]').forEach(ch=>ch.addEventListener('change', ()=>toggleTodoItem(ch.dataset.todoCheck)));
     els.todoBoard.querySelectorAll('[data-todo-del]').forEach(b=>b.addEventListener('click', ()=>deleteTodoItem(b.dataset.todoDel)));
-    // 属于项目的子任务：单击主体区域即打开其属性编辑（钻取详情），自定义项不触发
+    // 自定义任务：双击名称行内改名；项目类子任务：单击主体打开属性详情（自定义项不触发）
+    els.todoBoard.querySelectorAll('.todo-name[data-todo-editable]').forEach(n=>n.addEventListener('dblclick', ()=>startRename(n)));
     els.todoBoard.querySelectorAll('.todo-item').forEach(item=>{
       const main = item.querySelector('.todo-main');
       if(main) main.addEventListener('click', ()=>{
@@ -2986,6 +3027,32 @@ create policy "ppm own row" on ppm_workbench
     });
     bindTodoPicker();
     bindTodoDrag();
+  }
+  function commitQuickAdd(input){
+    const text = (input.value||'').trim(); if(!text) return;
+    if(!data.todo) data.todo = {morning:[]};
+    if(!data.todo.morning) data.todo.morning = [];
+    data.todo.morning.push({ id: uid(), kind:'custom', text, done:false });
+    saveData(); render();
+    const qa2 = els.todoBoard && els.todoBoard.querySelector('[data-todo-quickadd]');
+    if(qa2) qa2.focus();
+  }
+  function startRename(nameEl){
+    const itemEl = nameEl.closest('.todo-item'); if(!itemEl) return;
+    const id = itemEl.dataset.todoId;
+    const f = findTodoItem(id); if(!f || f.item.kind!=='custom') return;
+    if(nameEl.querySelector('input')) return; // 已在编辑
+    const cur = f.item.text||'';
+    const input = document.createElement('input');
+    input.type='text'; input.className='todo-edit-input'; input.value=cur;
+    nameEl.innerHTML=''; nameEl.appendChild(input); input.focus(); input.select();
+    let committed=false;
+    const finish = (save)=>{ if(committed) return; committed=true;
+      if(save){ const v = input.value.trim(); if(v && v!==cur){ f.item.text = v; const hist = data.todo.doneHistory||[]; const hi = hist.findIndex(h=>h.id===id); if(hi>=0) hist[hi].name = v; saveData(); } }
+      render();
+    };
+    input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); finish(true); } else if(e.key==='Escape'){ e.preventDefault(); finish(false); } });
+    input.addEventListener('blur', ()=>finish(true));
   }
   function findTodoItem(id){
     for(const sec of ['morning','afternoon']){
@@ -3002,7 +3069,11 @@ create policy "ppm own row" on ppm_workbench
   }
   function deleteTodoItem(id){
     const f = findTodoItem(id); if(!f) return;
-    if(f.item.kind==='custom'){ const hist = data.todo.doneHistory||[]; const hi = hist.findIndex(h=>h.id===id); if(hi>=0) hist.splice(hi,1); }
+    const hist = data.todo.doneHistory||[];
+    const hi = hist.findIndex(h=>h.id===id); if(hi>=0) hist.splice(hi,1); // 连带清除已完成归档
+    if(data.todo.yesterdayUnfinished) data.todo.yesterdayUnfinished = data.todo.yesterdayUnfinished.filter(u=>!(u && u.item && u.item.id===id)); // 连同昨天未完成池
+    if(!Array.isArray(data.todo.deletedIds)) data.todo.deletedIds = [];
+    if(!data.todo.deletedIds.includes(id)) data.todo.deletedIds.push(id); // 记入已删除清单，跨设备同步后过滤，使删除真正生效
     data.todo[f.sec].splice(f.idx, 1);
     saveData(); render();
   }
@@ -3027,6 +3098,9 @@ create policy "ppm own row" on ppm_workbench
   function importYesterdayUnfinished(){
     if(!data.todo) data.todo = {morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[]};
     if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = [];
+    if(!Array.isArray(data.todo.morning)) data.todo.morning = [];
+    if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
+    if(!Array.isArray(data.todo.deletedIds)) data.todo.deletedIds = [];
     const pend = data.todo.yesterdayUnfinished;
     if(!pend.length){ showToast('昨天没有未完成的任务'); return; }
     const existingIds = new Set([...data.todo.morning, ...data.todo.afternoon].map(i=>i.id));
@@ -3034,26 +3108,25 @@ create policy "ppm own row" on ppm_workbench
     let added = 0;
     pend.forEach(u=>{
       const it = u && u.item; if(!it) return;
+      if(data.todo.deletedIds.includes(it.id)) return; // 已删除：跳过
       if(it.kind==='task'){
         if(!getNode(it.refId)) return;          // 任务已删除：丢弃
         if(existingRefs.has(it.refId)) return;   // 已在今日：跳过
       }
       if(existingIds.has(it.id)) return;          // 已在今日（重复）：跳过
-      const sec = (u.sec==='afternoon') ? 'afternoon' : 'morning';
-      data.todo[sec].push(it);
+      data.todo.morning.push(it);                // 统一归入「上午」桶（界面已合并为单一列表）
       existingIds.add(it.id);
       existingRefs.add(it.refId);
       added++;
     });
-    data.todo.yesterdayUnfinished = []; // 已处理的快照清空（重复的/失效的一并清除）
+    data.todo.yesterdayUnfinished = []; // 已处理的快照清空（重复的/失效的/已删除的一并清除）
     saveData(); render();
     showToast(added ? `已将 ${added} 个昨日未完成任务重新加入今日待办` : '昨日未完成的任务都已在本日');
   }
   function bindTodoDrag(){
-    const lists = els.todoBoard.querySelectorAll('.todo-list');
+    // 单一合并列表：只绑定带 data-todo-list 的活跃列表；按 DOM 顺序重建 morning / afternoon 两个桶
+    const lists = els.todoBoard.querySelectorAll('.todo-list[data-todo-list]');
     lists.forEach(list=>{
-      const sec = list.dataset.todoList;
-      // dragover / drop 绑定在列表容器上，才能可靠识别「拖入的目标板块」（含跨上午/下午）
       list.addEventListener('dragover', e=>{
         e.preventDefault();
         const dragging = els.todoBoard.querySelector('.todo-item.dragging');
@@ -3064,27 +3137,18 @@ create policy "ppm own row" on ppm_workbench
       });
       list.addEventListener('drop', e=>{
         e.preventDefault();
-        const targetSec = sec;
-        const sourceSec = todoDragSourceSec;
-        const draggedId = todoDragId;
-        // 跨板块拖拽：先从源板块取出被拖项对象（务必在移除前捕获），再从源板块移除
-        let draggedObj = null;
-        if(sourceSec && sourceSec !== targetSec){
-          const srcMap = {}; (data.todo[sourceSec]||[]).forEach(i=>srcMap[i.id]=i);
-          draggedObj = srcMap[draggedId];
-          data.todo[sourceSec] = (data.todo[sourceSec]||[]).filter(i=>i.id !== draggedId);
-        }
-        // 按目标列表当前 DOM 顺序重建目标板块数组（含被拖入的项）
-        const targetIds = [...list.querySelectorAll('.todo-item')].map(x=>x.dataset.todoId);
-        const targetMap = {}; (data.todo[targetSec]||[]).forEach(i=>targetMap[i.id]=i);
-        if(draggedObj) targetMap[draggedId] = draggedObj;
-        data.todo[targetSec] = targetIds.map(id=>targetMap[id]).filter(Boolean);
+        // 按当前 DOM 顺序，把各项归回其原本所在的桶（morning / afternoon），实现列表内重排
+        const ids = [...list.querySelectorAll('.todo-item')].map(x=>x.dataset.todoId);
+        const mMap={}, aMap={};
+        (data.todo.morning||[]).forEach(i=>mMap[i.id]=i);
+        (data.todo.afternoon||[]).forEach(i=>aMap[i.id]=i);
+        data.todo.morning = ids.filter(id=>mMap[id]).map(id=>mMap[id]);
+        data.todo.afternoon = ids.filter(id=>aMap[id]).map(id=>aMap[id]);
         saveData(); render();
       });
-      // 仅 dragstart / dragend 需要逐项绑定（标记拖拽源与状态）
       list.querySelectorAll('.todo-item[draggable="true"]').forEach(item=>{
-        item.addEventListener('dragstart', e=>{ item.classList.add('dragging'); todoDragSourceSec = item.closest('.todo-list').dataset.todoList; todoDragId = item.dataset.todoId; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', item.dataset.todoId); });
-        item.addEventListener('dragend', ()=>{ item.classList.remove('dragging'); todoDragSourceSec = null; todoDragId = null; els.todoBoard.querySelectorAll('.todo-item').forEach(x=>x.classList.remove('drag-over')); });
+        item.addEventListener('dragstart', e=>{ item.classList.add('dragging'); todoDragId = item.dataset.todoId; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', item.dataset.todoId); });
+        item.addEventListener('dragend', ()=>{ item.classList.remove('dragging'); todoDragId = null; els.todoBoard.querySelectorAll('.todo-item').forEach(x=>x.classList.remove('drag-over')); });
       });
     });
   }
