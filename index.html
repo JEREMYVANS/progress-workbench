@@ -2884,7 +2884,8 @@ create policy "ppm own row" on ppm_workbench
     }
     const body = els.todoBoard.querySelector('#todoBody'); if(!body) return;
     const delSet = data.todo.deletedIds || [];
-    const all = (data.todo.morning||[]).concat(data.todo.afternoon||[]).filter(it=>it && delSet.indexOf(it.id)<0);
+    // 默认排序：自定义任务(0)在上，所属项目任务(1)在下；稳定排序，组内拖拽顺序仍保留
+    const all = (data.todo.morning||[]).concat(data.todo.afternoon||[]).filter(it=>it && delSet.indexOf(it.id)<0).sort((a,b)=> ((a&&a.kind==='task')?1:0) - ((b&&b.kind==='task')?1:0));
     const active = all.filter(it=>!isTodoDone(it));
     const doneList = all.filter(it=>isTodoDone(it));
     body.innerHTML =
@@ -3137,14 +3138,24 @@ create policy "ppm own row" on ppm_workbench
       });
       list.addEventListener('drop', e=>{
         e.preventDefault();
-        // 按当前 DOM 顺序，把各项归回其原本所在的桶（morning / afternoon），实现列表内重排
+        // 按当前 DOM 顺序，把「活跃」项归回其原本所在的桶（morning / afternoon），实现列表内重排。
+        // 关键：已完成项渲染在独立的 done 列表（不在本 DOM 中），必须原样保留，否则会被误删。
         const ids = [...list.querySelectorAll('.todo-item')].map(x=>x.dataset.todoId);
         const mMap={}, aMap={};
         (data.todo.morning||[]).forEach(i=>mMap[i.id]=i);
         (data.todo.afternoon||[]).forEach(i=>aMap[i.id]=i);
-        data.todo.morning = ids.filter(id=>mMap[id]).map(id=>mMap[id]);
-        data.todo.afternoon = ids.filter(id=>aMap[id]).map(id=>aMap[id]);
-        saveData(); render();
+        const newM = ids.filter(id=>mMap[id]).map(id=>mMap[id]);
+        const newA = ids.filter(id=>aMap[id]).map(id=>aMap[id]);
+        // 已完成项恒不在活跃 DOM 中，但加一层去重守卫，避免极端情况下重复计入
+        const doneM = (data.todo.morning||[]).filter(it=>isTodoDone(it) && !newM.includes(it));
+        const doneA = (data.todo.afternoon||[]).filter(it=>isTodoDone(it) && !newA.includes(it));
+        const nextM = newM.concat(doneM);
+        const nextA = newA.concat(doneA);
+        const prevM = (data.todo.morning||[]).map(i=>i.id).join(',');
+        const prevA = (data.todo.afternoon||[]).map(i=>i.id).join(',');
+        const changed = (nextM.map(i=>i.id).join(',') !== prevM) || (nextA.map(i=>i.id).join(',') !== prevA);
+        data.todo.morning = nextM; data.todo.afternoon = nextA;
+        if(changed){ saveData(); render(); }
       });
       list.querySelectorAll('.todo-item[draggable="true"]').forEach(item=>{
         item.addEventListener('dragstart', e=>{ item.classList.add('dragging'); todoDragId = item.dataset.todoId; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', item.dataset.todoId); });
