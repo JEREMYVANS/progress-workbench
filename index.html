@@ -1203,6 +1203,7 @@ create policy "ppm own row" on ppm_workbench
     if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = []; // 跨天时被清空的「未完成」待办，等待「昨天未完成→今天」重新拉回
     if(!Array.isArray(data.todo.doneHistory)) data.todo.doneHistory = []; // 已完成的自定义任务归档（跨天清空今日板块后仍在「已完成任务」日历保留）
     if(!Array.isArray(data.todo.deletedIds)) data.todo.deletedIds = []; // 已删除的待办 id（随同步合并，使删除能在多设备真正生效）
+    if(typeof data.todo._savedAt !== 'number') data.todo._savedAt = 0; // 今日板最后修改时间：用于跨设备合并时判定「哪一侧最近被改过」
     ensureProjectColors();
     normalizeTree(data.projects); // 防御：保证每棵节点都有 tasks 数组（防止手工/旧备份数据缺字段导致遍历异常）
     lastSavedAt = data._savedAt || 0;
@@ -1460,18 +1461,26 @@ create policy "ppm own row" on ppm_workbench
     const deletedIds = unionTodo(local.deletedIds, cloud.deletedIds, x=>x);
     const isDel = id => deletedIds.indexOf(id) >= 0;
     const cloudHasBoard = Array.isArray(cloud.morning) && Array.isArray(cloud.afternoon) && !!cloudDay;
-    let morning, afternoon;
+    const lu = local._savedAt||0, cu = cloud._savedAt||0; // 两侧今日板的最后修改时间
+    let morning, afternoon, boardSaved;
     if(sameDay){
-      // 同一天：双方各自新增的待办都保留（按 id 并集）
-      morning = unionTodo(local.morning, cloud.morning, it=>it && it.id);
-      afternoon = unionTodo(local.afternoon, cloud.afternoon, it=>it && it.id);
+      // 同一天：以「修改时间较新」的一侧为权威顺序与内容（最后写入者胜出，使其它设备的改名/排序能覆盖过来）；
+      // 另一侧独有的新增项（尚未同步到较新一侧）追加到末尾，保证新增不丢。
+      const newerIsCloud = cu >= lu;
+      const base = newerIsCloud ? cloud : local;
+      const other = newerIsCloud ? local : cloud;
+      morning = unionTodo(base.morning, other.morning, it=>it && it.id);
+      afternoon = unionTodo(base.afternoon, other.afternoon, it=>it && it.id);
+      boardSaved = Math.max(lu, cu);
     } else if(cloudHasBoard){
       // 天数不一致且云端有当天有效板子：以云端当天板子为准（避免把"已跨天清空"的板子又拉回昨天任务）
       morning = cloud.morning; afternoon = cloud.afternoon;
+      boardSaved = cu;
     } else {
       // 云端没有有效板子：保留本地板子（首同步/云端缺字段时不丢本地）
       morning = Array.isArray(local.morning) ? local.morning : [];
       afternoon = Array.isArray(local.afternoon) ? local.afternoon : [];
+      boardSaved = lu;
     }
     let yesterdayUnfinished = unionTodo(local.yesterdayUnfinished, cloud.yesterdayUnfinished, u=>u && u.item && u.item.id);
     let doneHistory = unionTodo(local.doneHistory, cloud.doneHistory, h=>h && h.id);
@@ -1499,20 +1508,33 @@ create policy "ppm own row" on ppm_workbench
       morning, afternoon,
       lastDay: cloudDay || localDay || null,
       yesterdayUnfinished, doneHistory, deletedIds,
+      _savedAt: boardSaved,
       _r2: local._r2 || cloud._r2 || null
     };
   }
-  // 比较两份 todo 的四个集合是否按 id 一致（用于判断合并后本地是否向云端贡献了新内容）
+  // 比较两份 todo 是否一致（用于判断合并后是否需要把差异推回云端）：
+  // 上午/下午板按「顺序 + 内容」逐条签名比较（改名、排序、勾选完成都要能触发回推）；
+  // yesterdayUnfinished / doneHistory 按 id 集合比较。
   function todoEqual(a, b){
     if(!a || !b) return a === b;
-    const keys = ['morning','afternoon','yesterdayUnfinished','doneHistory'];
-    for(const k of keys){
-      const x = a[k]||[], y = b[k]||[];
-      if(x.length !== y.length) return false;
-      const idOf = it => it && (it.id || (it.item && it.item.id));
-      const xs = new Set(x.map(idOf)), ys = new Set(y.map(idOf));
-      for(const id of xs) if(!ys.has(id)) return false;
-      for(const id of ys) if(!xs.has(id)) return false;
+    const rowSig = it => {
+      if(!it) return '|';
+      const id = it.id || (it.item && it.item.id) || '';
+      const k = it.kind || '';
+      const txt = it.text || (it.item && it.item.text) || '';
+      const done = it.done ? 1 : 0;
+      const ref = it.refId || '';
+      return [id, k, txt, done, ref].join('|');
+    };
+    const arrSig = arr => (arr||[]).map(rowSig).join(';');
+    if(arrSig(a.morning) !== arrSig(b.morning)) return false;
+    if(arrSig(a.afternoon) !== arrSig(b.afternoon)) return false;
+    const idSet = arr => new Set((arr||[]).map(it => it && (it.id || (it.item && it.item.id))));
+    for(const k of ['yesterdayUnfinished','doneHistory']){
+      const x = idSet(a[k]), y = idSet(b[k]);
+      if(x.size !== y.size) return false;
+      for(const id of x) if(!y.has(id)) return false;
+      for(const id of y) if(!x.has(id)) return false;
     }
     return true;
   }
@@ -1576,6 +1598,7 @@ create policy "ppm own row" on ppm_workbench
         // 合并后若本地贡献了云端没有的内容（待办板/已完成/未完成），必须把合并结果推回云端，否则其它设备看不到
         if(!todoEqual(data.todo, _cloudTodo)){
           data._savedAt = Date.now(); lastSavedAt = data._savedAt;
+          data.todo._savedAt = Math.max(data.todo._savedAt||0, Date.now());
           setTimeout(()=>{ if(sbAuthed() && !pushRemote.running) pushRemote(); }, 600);
         }
         ensureProjectColors(); // 云端拉回旧颜色后，强制按当前项目顺序重新分配黄金角色相
@@ -1590,6 +1613,12 @@ create policy "ppm own row" on ppm_workbench
         syncLog.lastPull = new Date().toLocaleString('zh-CN',{hour12:false}) + '（已是最新）';
         // 即使本地较新，也要把云端持久化的待办（已完成自定义任务 / 跨天未完成）并入本地，避免丢失其它设备产生的内容
         if(remote && remote.todo) data.todo = mergeTodo(data.todo, remote.todo);
+        // 合并后若本地比云端多了内容（如本设备新增、或刚并入云端独有项），把收敛后的板子推回云端，
+        // 使改名/排序/新增在所有设备间真正闭环（否则只有"较新一侧"能看到，另一侧一直缺）。
+        if(remote && remote.todo && !todoEqual(data.todo, remote.todo)){
+          data.todo._savedAt = Math.max(data.todo._savedAt||0, Date.now());
+          setTimeout(()=>{ if(sbAuthed() && !pushRemote.running) pushRemote(); }, 600);
+        }
         // 本地比云端新（如某次推送未成功落库）：把本地修复推回云端，避免下次拉取又把本地旧版本拉回来
         if(sbAuthed() && remote && (data._savedAt||0) > (remote._savedAt||0) + 2000 && !pushRemote.running){
           setTimeout(()=>{ if(sbAuthed() && !pushRemote.running) pushRemote(); }, 800);
@@ -2879,7 +2908,7 @@ create policy "ppm own row" on ppm_workbench
   function isTodoDone(it){ return it.kind==='task' ? !!(getNode(it.refId) && getNode(it.refId).completed) : !!it.done; }
   function renderTodo(){
     if(!els.todoBoard) return;
-    if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[], doneHistory:[], deletedIds:[] };
+    if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[], doneHistory:[], deletedIds:[], _savedAt:0 };
     ['morning','afternoon','yesterdayUnfinished','doneHistory','deletedIds'].forEach(k=>{ if(!Array.isArray(data.todo[k])) data.todo[k]=[]; });
     const wk = els.todoBoard.querySelector('#todoWeekday'); if(wk) wk.textContent = '今天 · ' + weekNames[todayDate.getDay()];
     const tx = els.todoBoard.querySelector('#todoText'); if(tx) tx.textContent = (todayDate.getMonth()+1) + '月' + todayDate.getDate() + '日';
@@ -3038,12 +3067,14 @@ create policy "ppm own row" on ppm_workbench
     bindTodoPicker();
     bindTodoDrag();
   }
+  // 标记今日板被改动：记录最后修改时间，供跨设备合并时判定哪一侧更"新"
+  function touchTodo(){ if(data && data.todo && typeof data.todo==='object'){ data.todo._savedAt = Date.now(); } }
   function commitQuickAdd(input){
     const text = (input.value||'').trim(); if(!text) return;
     if(!data.todo) data.todo = {morning:[]};
     if(!data.todo.morning) data.todo.morning = [];
     data.todo.morning.push({ id: uid(), kind:'custom', text, done:false });
-    saveData(); render();
+    touchTodo(); saveData(); render();
     const qa2 = els.todoBoard && els.todoBoard.querySelector('[data-todo-quickadd]');
     if(qa2) qa2.focus();
   }
@@ -3058,7 +3089,7 @@ create policy "ppm own row" on ppm_workbench
     nameEl.innerHTML=''; nameEl.appendChild(input); input.focus(); input.select();
     let committed=false;
     const finish = (save)=>{ if(committed) return; committed=true;
-      if(save){ const v = input.value.trim(); if(v && v!==cur){ f.item.text = v; const hist = data.todo.doneHistory||[]; const hi = hist.findIndex(h=>h.id===id); if(hi>=0) hist[hi].name = v; saveData(); } }
+      if(save){ const v = input.value.trim(); if(v && v!==cur){ f.item.text = v; const hist = data.todo.doneHistory||[]; const hi = hist.findIndex(h=>h.id===id); if(hi>=0) hist[hi].name = v; touchTodo(); saveData(); } }
       render();
     };
     input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); finish(true); } else if(e.key==='Escape'){ e.preventDefault(); finish(false); } });
@@ -3075,7 +3106,7 @@ create policy "ppm own row" on ppm_workbench
     if(!data.todo) data.todo = {morning:[], afternoon:[]};
     if(!data.todo[sec]) data.todo[sec] = [];
     data.todo[sec].push(item);
-    saveData(); render();
+    touchTodo(); saveData(); render();
   }
   function deleteTodoItem(id){
     const f = findTodoItem(id); if(!f) return;
@@ -3085,7 +3116,7 @@ create policy "ppm own row" on ppm_workbench
     if(!Array.isArray(data.todo.deletedIds)) data.todo.deletedIds = [];
     if(!data.todo.deletedIds.includes(id)) data.todo.deletedIds.push(id); // 记入已删除清单，跨设备同步后过滤，使删除真正生效
     data.todo[f.sec].splice(f.idx, 1);
-    saveData(); render();
+    touchTodo(); saveData(); render();
   }
   function toggleTodoItem(id){
     const f = findTodoItem(id); if(!f) return;
@@ -3102,7 +3133,7 @@ create policy "ppm own row" on ppm_workbench
       const hist = data.todo.doneHistory || (data.todo.doneHistory=[]);
       if(it.done){ it.doneAt = todayISO; if(!hist.some(h=>h.id===it.id)) hist.push({ id:it.id, name:it.text, doneAt: todayISO }); }
       else { const hi = hist.findIndex(h=>h.id===it.id); if(hi>=0) hist.splice(hi,1); }
-      saveData(); render();
+      touchTodo(); saveData(); render();
     }
   }
   function importYesterdayUnfinished(){
@@ -3130,7 +3161,7 @@ create policy "ppm own row" on ppm_workbench
       added++;
     });
     data.todo.yesterdayUnfinished = []; // 已处理的快照清空（重复的/失效的/已删除的一并清除）
-    saveData(); render();
+    touchTodo(); saveData(); render();
     showToast(added ? `已将 ${added} 个昨日未完成任务重新加入今日待办` : '昨日未完成的任务都已在本日');
   }
   function bindTodoDrag(){
@@ -3164,7 +3195,7 @@ create policy "ppm own row" on ppm_workbench
         const prevA = (data.todo.afternoon||[]).map(i=>i.id).join(',');
         const changed = (nextM.map(i=>i.id).join(',') !== prevM) || (nextA.map(i=>i.id).join(',') !== prevA);
         data.todo.morning = nextM; data.todo.afternoon = nextA;
-        if(changed){ saveData(); render(); }
+        if(changed){ touchTodo(); saveData(); render(); }
       });
       list.querySelectorAll('.todo-item[draggable="true"]').forEach(item=>{
         item.addEventListener('dragstart', e=>{ item.classList.add('dragging'); todoDragId = item.dataset.todoId; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', item.dataset.todoId); });
