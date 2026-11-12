@@ -1748,7 +1748,16 @@ create policy "ppm own row" on ppm_workbench
     return false;
   }
   function markDescendantsCompleted(node, completed){
-    (node.tasks||[]).forEach(c=>{ c.completed=completed; c.completedAt = completed ? todayISO : null; markDescendantsCompleted(c, completed); });
+    (node.tasks||[]).forEach(c=>{
+      if(completed){
+        // 级联勾选：已完成的后代保留其原有完成日期，仅对尚未完成的后代补打今天
+        if(!c.completed){ c.completed = true; c.completedAt = todayISO; }
+        else if(!c.completedAt){ c.completedAt = todayISO; } // 已勾选但缺日期的补齐
+      } else {
+        c.completed = false; c.completedAt = null;
+      }
+      markDescendantsCompleted(c, completed);
+    });
   }
   function uncheckAncestors(id){
     const path=findNodePath(id); if(!path) return;
