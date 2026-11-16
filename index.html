@@ -1196,6 +1196,9 @@ create policy "ppm own row" on ppm_workbench
     typeOrderList(); // 初始化/修补类型排序
     if(!Array.isArray(data.overviewOrder)) data.overviewOrder = []; // 项目总览：项目排序
     if(!data.overviewSelected) data.overviewSelected = null;        // 项目总览：上次选中的项目
+    if(typeof data.overviewHideCompleted !== 'boolean') data.overviewHideCompleted = false; // 项目总览：是否隐藏已完成（跨会话/跨设备记住）
+    if(typeof data.overviewDoneOpen !== 'boolean') data.overviewDoneOpen = false;           // 项目总览：「已完成」分组是否展开
+    if(!data.overviewPriorityFilter) data.overviewPriorityFilter = 'all';                   // 项目总览：优先级筛选
     if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[] }; // 今日待办：上午/下午两个板块 + 跨天快照
     if(!Array.isArray(data.todo.morning)) data.todo.morning = [];
     if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
@@ -1435,7 +1438,8 @@ create policy "ppm own row" on ppm_workbench
           if(trimmed.length >= 10) break;
         }
         const payload = { projects: data.projects, _savedAt: Date.now(), todaySort: data.todaySort, todayManual: data.todayManual,
-          customTypes: data.customTypes||[], typeOrder: data.typeOrder||[], deletedTypes: data.deletedTypes||[], overviewOrder: data.overviewOrder||[], todo: data.todo||{morning:[],afternoon:[]} };
+          customTypes: data.customTypes||[], typeOrder: data.typeOrder||[], deletedTypes: data.deletedTypes||[], overviewOrder: data.overviewOrder||[], todo: data.todo||{morning:[],afternoon:[]},
+          overviewHideCompleted: !!data.overviewHideCompleted, overviewDoneOpen: !!data.overviewDoneOpen, overviewPriorityFilter: data.overviewPriorityFilter||'all', overviewSelected: data.overviewSelected||null };
         if(trimmed.length) payload._history = trimmed;
         await sbUpsertRow(payload);
         lastPushDoneTs = Date.now();
@@ -1603,10 +1607,13 @@ create policy "ppm own row" on ppm_workbench
         const _prevSort = data.todaySort, _prevManual = data.todayManual;
         // 类型管理与总览排序等本地字段：云端副本若缺失（旧版本推送没带），保留本地值不被抹掉
         const _prevLocal = { customTypes: data.customTypes, typeOrder: data.typeOrder, deletedTypes: data.deletedTypes, overviewOrder: data.overviewOrder, todo: data.todo };
+        // 项目总览视图态（标量）：云端旧版本没带这些字段时保留本地值，避免「隐藏已完成」等设置被拉取打回默认
+        const _prevOv = { overviewHideCompleted: data.overviewHideCompleted, overviewDoneOpen: data.overviewDoneOpen, overviewPriorityFilter: data.overviewPriorityFilter, overviewSelected: data.overviewSelected };
         data = remote; normalizeTypes(data.projects, true); lastSavedAt = data._savedAt || Date.now();
         if(!data.todaySort && _prevSort) data.todaySort = _prevSort;
         if(!data.todayManual && _prevManual) data.todayManual = _prevManual;
         Object.keys(_prevLocal).forEach(k=>{ if(k==='todo') return; if(!Array.isArray(data[k]) && Array.isArray(_prevLocal[k])) data[k] = _prevLocal[k]; });
+        Object.keys(_prevOv).forEach(k=>{ if(typeof data[k]==='undefined' || data[k]===null){ if(typeof _prevOv[k]!=='undefined' && _prevOv[k]!==null) data[k]=_prevOv[k]; } });
         if(!data.todo || typeof data.todo!=='object' || !Array.isArray(data.todo.morning) || !Array.isArray(data.todo.afternoon)) data.todo = _prevLocal.todo; // 云端旧版本未带 todo 时保留本地
         const _cloudTodo = remote.todo;
         data.todo = mergeTodo(_prevLocal.todo, data.todo); // 共享板按 id 并集合并；lastDay 以云端为准
