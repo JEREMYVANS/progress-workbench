@@ -1233,9 +1233,11 @@ create policy "ppm own row" on ppm_workbench
     // 跨天 / 首次 / 旧数据 / 强制迁移：清空今日待办，并把未完成的项暂存，供「昨天未完成→今天」拉回
     try{
       const unfinished = [];
+      const histDone = doneHistSet(data.todo); // doneHistory 为准：已完成的自定义任务绝不进「昨天未完成」快照
       ['morning','afternoon'].forEach(sec=>{
         (data.todo[sec]||[]).forEach(it=>{
           if(data.todo.deletedIds && data.todo.deletedIds.indexOf(it.id)>=0) return; // 已删除：不快照
+          if(it && it.kind==='custom' && histDone.has(it.id)) return; // 已完成（含跨设备）：不快照，防止今天重新出现
           let done = false;
           try{ done = (it.kind==='task') ? (()=>{ const n=getNode(it.refId); return n ? !!n.completed : true; })() : !!it.done; }catch(_){ done = false; }
           if(!done) unfinished.push({ sec, item:it });
@@ -1488,9 +1490,11 @@ create policy "ppm own row" on ppm_workbench
       // 离线跨午夜兜底：本地板子里「未同步」的未完成项不能丢，快照进 yesterdayUnfinished；已完成自定义项归档进 doneHistory
       const t = todoToday();
       const seen = new Set(yesterdayUnfinished.map(u=>u && u.item && u.item.id));
+      const histDone = doneHistSet({ doneHistory }); // 以合并后的 doneHistory 为准
       const snap = [];
       ['morning','afternoon'].forEach(sec=>{
         (local[sec]||[]).forEach(it=>{
+          if(it && it.kind==='custom' && histDone.has(it.id)) return; // 已完成：不快照进「昨天未完成」
           let done=false;
           try{ done = (it.kind==='task') ? (()=>{ const n=getNode(it.refId); return n ? !!n.completed : true; })() : !!it.done; }catch(_){ done=false; }
           if(!done) snap.push({ sec, item: it });
@@ -1504,6 +1508,9 @@ create policy "ppm own row" on ppm_workbench
     afternoon = (Array.isArray(afternoon)?afternoon:[]).filter(it=>!(it && isDel(it.id)));
     yesterdayUnfinished = yesterdayUnfinished.filter(u=>!(u && u.item && isDel(u.item.id)));
     doneHistory = doneHistory.filter(h=>!(h && isDel(h.id)));
+    // 关键：已完成的自定义项（doneHistory 为准）不得残留在「昨天未完成」里，否则今天会被重新导入出现
+    const finalDone = doneHistSet({ doneHistory });
+    yesterdayUnfinished = yesterdayUnfinished.filter(u=>!(u && u.item && u.item.kind==='custom' && finalDone.has(u.item.id)));
     return {
       morning, afternoon,
       lastDay: cloudDay || localDay || null,
@@ -1543,6 +1550,14 @@ create policy "ppm own row" on ppm_workbench
     const add = x=>{ if(x==null) return; const k = keyFn(x); if(k==null || seen.has(k)) return; seen.add(k); out.push(x); };
     (a||[]).forEach(add); (b||[]).forEach(add);
     return out;
+  }
+  // doneHistory 是「自定义任务是否已完成」的权威记录（跨天/跨设备持久，勾选或删除时会同步移除）。
+  // 板子上某个自定义项的 done 标志可能因设备离线而滞后，故凡涉及「是否完成」的判断都以本集合为准，
+  // 避免已完成的自定义任务被当成未完成快照、又被「昨天未完成→今天」重新导入。
+  function doneHistSet(todo){
+    const s = new Set();
+    ((todo && todo.doneHistory) || []).forEach(h=>{ if(h && h.id) s.add(h.id); });
+    return s;
   }
   async function pullRemote(silent, force){
     if(!sbAuthed()){ if(!(await trySilentReauth())) return; }
@@ -2905,7 +2920,11 @@ create policy "ppm own row" on ppm_workbench
     const names = findNodePath(id).map(x => { const n = (x===proj.id) ? proj : getNode(x, [proj]); return n ? n.name : ''; }).slice(0, -1);
     return names.length > 1 ? names.join(' / ') : (names[0] || proj.name);
   }
-  function isTodoDone(it){ return it.kind==='task' ? !!(getNode(it.refId) && getNode(it.refId).completed) : !!it.done; }
+  function isTodoDone(it){
+    if(it.kind==='task') return !!(getNode(it.refId) && getNode(it.refId).completed);
+    // 自定义项：doneHistory 为准（跨设备已完成的权威记录），兼容板子上尚未合并的 done 标志
+    return !!it.done || doneHistSet(data.todo).has(it.id);
+  }
   function renderTodo(){
     if(!els.todoBoard) return;
     if(!data.todo || typeof data.todo!=='object') data.todo = { morning:[], afternoon:[], lastDay:null, yesterdayUnfinished:[], doneHistory:[], deletedIds:[], _savedAt:0 };
@@ -2953,7 +2972,7 @@ create policy "ppm own row" on ppm_workbench
       const node = getNode(it.refId);
       if(!node){ name='（任务已删除）'; sub='<span class="todo-tag todo-tag-del">已失效</span>'; kindClass='todo-kind-task todo-dangling'; }
       else { done = !!node.completed; name = node.name; const path = taskPathLabel(it.refId); sub = `<span class="todo-tag todo-tag-task">任务</span> ${escapeHTML(path||'')}`; kindClass='todo-kind-task'; }
-    } else { done = !!it.done; name = it.text||''; sub = '<span class="todo-tag todo-tag-custom">自定义</span>'; kindClass='todo-kind-custom'; }
+    } else { done = !!it.done || doneHistSet(data.todo).has(it.id); name = it.text||''; sub = '<span class="todo-tag todo-tag-custom">自定义</span>'; kindClass='todo-kind-custom'; }
     const checked = done ? 'checked' : '';
     const editable = (it.kind==='custom') ? ' data-todo-editable="1"' : '';
     return `<div class="todo-item ${kindClass}${done?' done':''}" data-todo-id="${it.id}" draggable="${drag===false?'false':'true'}">
@@ -3147,9 +3166,11 @@ create policy "ppm own row" on ppm_workbench
     const existingIds = new Set([...data.todo.morning, ...data.todo.afternoon].map(i=>i.id));
     const existingRefs = new Set([...data.todo.morning, ...data.todo.afternoon].filter(i=>i.kind==='task').map(i=>i.refId));
     let added = 0;
+    const histDone = doneHistSet(data.todo);
     pend.forEach(u=>{
       const it = u && u.item; if(!it) return;
       if(data.todo.deletedIds.includes(it.id)) return; // 已删除：跳过
+      if(it.kind==='custom' && histDone.has(it.id)) return; // 已完成（含跨设备）：绝不重新导入
       if(it.kind==='task'){
         if(!getNode(it.refId)) return;          // 任务已删除：丢弃
         if(existingRefs.has(it.refId)) return;   // 已在今日：跳过
