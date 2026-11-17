@@ -1204,6 +1204,7 @@ create policy "ppm own row" on ppm_workbench
     if(!Array.isArray(data.todo.afternoon)) data.todo.afternoon = [];
     if(typeof data.todo.lastDay === 'undefined') data.todo.lastDay = null;          // 上一次打开的日期（ISO），用于跨天清空判定
     if(!Array.isArray(data.todo.yesterdayUnfinished)) data.todo.yesterdayUnfinished = []; // 跨天时被清空的「未完成」待办，等待「昨天未完成→今天」重新拉回
+    if(typeof data.todo.yesterdayConsumedDay !== 'string') data.todo.yesterdayConsumedDay = null; // 已导入消费掉的「昨天未完成」快照所属日（防止跨设备/刷新后旧快照复活）
     if(!Array.isArray(data.todo.doneHistory)) data.todo.doneHistory = []; // 已完成的自定义任务归档（跨天清空今日板块后仍在「已完成任务」日历保留）
     if(!Array.isArray(data.todo.deletedIds)) data.todo.deletedIds = []; // 已删除的待办 id（随同步合并，使删除能在多设备真正生效）
     if(typeof data.todo._savedAt !== 'number') data.todo._savedAt = 0; // 今日板最后修改时间：用于跨设备合并时判定「哪一侧最近被改过」
@@ -1260,6 +1261,7 @@ create policy "ppm own row" on ppm_workbench
     data.todo.morning = [];
     data.todo.afternoon = [];
     data.todo.lastDay = today;
+    data.todo.yesterdayConsumedDay = null; // 新的一天：新一轮「昨天未完成」快照尚未被消费
     return true; // 表示本次确实执行了清空
   }
   // 设备标识：每台设备/每个浏览器入口生成一次，用于多端同步诊断
@@ -1490,6 +1492,11 @@ create policy "ppm own row" on ppm_workbench
     }
     let yesterdayUnfinished = unionTodo(local.yesterdayUnfinished, cloud.yesterdayUnfinished, u=>u && u.item && u.item.id);
     let doneHistory = unionTodo(local.doneHistory, cloud.doneHistory, h=>h && h.id);
+    // 「昨天未完成」导入消费标记：取两侧较新的消费日（取日期字符串较大者）。
+    // 若已消费日 === 当前板子所属日，说明这批快照已被某台设备点过「昨天未完成→今天」，必须保持清空，
+    // 防止另一台离线设备的旧快照在下次拉取时被并集复活（按钮反复亮起）。
+    const localCD = local.yesterdayConsumedDay || null, cloudCD = cloud.yesterdayConsumedDay || null;
+    const consumedDay = (localCD && cloudCD) ? (localCD >= cloudCD ? localCD : cloudCD) : (localCD || cloudCD);
     if(!sameDay){
       // 离线跨午夜兜底：本地板子里「未同步」的未完成项不能丢，快照进 yesterdayUnfinished；已完成自定义项归档进 doneHistory
       const t = todoToday();
@@ -1512,13 +1519,24 @@ create policy "ppm own row" on ppm_workbench
     afternoon = (Array.isArray(afternoon)?afternoon:[]).filter(it=>!(it && isDel(it.id)));
     yesterdayUnfinished = yesterdayUnfinished.filter(u=>!(u && u.item && isDel(u.item.id)));
     doneHistory = doneHistory.filter(h=>!(h && isDel(h.id)));
-    // 关键：已完成的自定义项（doneHistory 为准）不得残留在「昨天未完成」里，否则今天会被重新导入出现
+    // 关键：已完成的项不得残留在「昨天未完成」里，否则今天会被重新导入出现。
+    //  自定义项以 doneHistory 为准；已有任务(kind='task')以项目树里节点.completed 为准。
     const finalDone = doneHistSet({ doneHistory });
-    yesterdayUnfinished = yesterdayUnfinished.filter(u=>!(u && u.item && u.item.kind==='custom' && finalDone.has(u.item.id)));
+    yesterdayUnfinished = yesterdayUnfinished.filter(u=>{
+      if(!u || !u.item) return false;
+      if(u.item.kind==='custom' && finalDone.has(u.item.id)) return false;
+      if(u.item.kind==='task'){
+        try{ const n = getNode(u.item.refId); if(!n || n.completed) return false; }catch(_){ return false; }
+      }
+      return true;
+    });
+    // 当前板子所属日（以云端为准，与 lastDay 一致）已被标记消费：强制清空快照，杜绝旧副本复活
+    const mergedDay = cloudDay || localDay || null;
+    if(consumedDay && mergedDay && consumedDay === mergedDay) yesterdayUnfinished = [];
     return {
       morning, afternoon,
-      lastDay: cloudDay || localDay || null,
-      yesterdayUnfinished, doneHistory, deletedIds,
+      lastDay: mergedDay,
+      yesterdayUnfinished, doneHistory, deletedIds, yesterdayConsumedDay: consumedDay,
       _savedAt: boardSaved,
       _r2: local._r2 || cloud._r2 || null
     };
@@ -3118,7 +3136,20 @@ create policy "ppm own row" on ppm_workbench
       if(save){ const v = input.value.trim(); if(v && v!==cur){ f.item.text = v; const hist = data.todo.doneHistory||[]; const hi = hist.findIndex(h=>h.id===id); if(hi>=0) hist[hi].name = v; touchTodo(); saveData(); } }
       render();
     };
-    input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); finish(true); } else if(e.key==='Escape'){ e.preventDefault(); finish(false); } });
+    // 中文/日文输入法组词期间：Enter 用于选字，不能当成"完成重命名"提交（否则会把拼音串当成名字存下来）。
+    // 用 composing 标志 + isComposing/keyCode229 双保险，等 compositionend 拿到最终文字后再提交。
+    let composing=false;
+    input.addEventListener('compositionstart', ()=>{ composing=true; });
+    input.addEventListener('compositionend', ()=>{ composing=false; if(imeEnterPending){ imeEnterPending=false; setTimeout(()=>finish(true),0); } });
+    let imeEnterPending=false;
+    input.addEventListener('keydown', e=>{
+      if(composing || e.isComposing || e.keyCode===229){
+        // 组词中的回车交给输入法确认候选，不拦截；只记下"用户按了回车"，等 compositionend 拿到最终文字再提交
+        if(e.key==='Enter' || e.keyCode===229) imeEnterPending=true;
+        return;
+      }
+      if(e.key==='Enter'){ e.preventDefault(); finish(true); } else if(e.key==='Escape'){ e.preventDefault(); finish(false); }
+    });
     input.addEventListener('blur', ()=>finish(true));
   }
   function findTodoItem(id){
@@ -3179,8 +3210,10 @@ create policy "ppm own row" on ppm_workbench
       if(data.todo.deletedIds.includes(it.id)) return; // 已删除：跳过
       if(it.kind==='custom' && histDone.has(it.id)) return; // 已完成（含跨设备）：绝不重新导入
       if(it.kind==='task'){
-        if(!getNode(it.refId)) return;          // 任务已删除：丢弃
-        if(existingRefs.has(it.refId)) return;   // 已在今日：跳过
+        const node = getNode(it.refId);
+        if(!node) return;                       // 任务已删除：丢弃
+        if(node.completed) return;              // 任务已完成（含跨设备在昨日/今日刚勾选）：绝不重新导入
+        if(existingRefs.has(it.refId)) return;  // 已在今日：跳过
       }
       if(existingIds.has(it.id)) return;          // 已在今日（重复）：跳过
       data.todo.morning.push(it);                // 统一归入「上午」桶（界面已合并为单一列表）
@@ -3189,6 +3222,8 @@ create policy "ppm own row" on ppm_workbench
       added++;
     });
     data.todo.yesterdayUnfinished = []; // 已处理的快照清空（重复的/失效的/已删除的一并清除）
+    // 标记这批快照在当前板子所属日已被消费：跨设备/刷新后不再复活（新的一天由 rollover Reset）
+    data.todo.yesterdayConsumedDay = data.todo.lastDay || todoToday();
     touchTodo(); saveData(); render();
     showToast(added ? `已将 ${added} 个昨日未完成任务重新加入今日待办` : '昨日未完成的任务都已在本日');
   }
